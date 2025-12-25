@@ -102,8 +102,22 @@ gazebo --verbose worlds/patrol_world.sdf
 - 里程计：`/patrol_robot/odom`
 - 相机：`/patrol_robot/front_camera/image_raw`
 - 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
-- 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，单束）
+- 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，9 束，约 0.5rad 视场角）
 - 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色）
+
+## 巡逻路径规划（基于墙体）
+
+`patrol_control/patrol_manager` 默认会解析 `models/patrol_environment/model.sdf` 里的 `Wall_*` 碰撞盒，构建 2D 栅格并在赛道区域里做 A* 规划，避免“直线去目标点会穿墙”的问题。
+
+常用启动参数（`patrol.launch.py`）：
+
+```bash
+# 关闭路径规划（退回为直线点到点 + 超声避障）
+ros2 launch patrol_bringup patrol.launch.py use_path_planner:=false
+
+# 调精度/安全边距
+ros2 launch patrol_bringup patrol.launch.py grid_resolution:=0.05 wall_inflation:=0.30
+```
 
 ## 动态障碍（两点往返）
 
@@ -122,8 +136,8 @@ gazebo --verbose worlds/patrol_world.sdf
 ```bash
 ros2 run patrol_control obstacle_controller --ros-args \
   -p obstacles:="[obstacle_1]" \
-  -p point_a_x:=-3.0 -p point_a_y:=0.9 \
-  -p point_b_x:=-1.0 -p point_b_y:=0.9 \
+  -p point_a_x:=3.974 -p point_a_y:=5.786 \
+  -p point_b_x:=4.024 -p point_b_y:=3.836 \
   -p speed:=0.4
 ```
 

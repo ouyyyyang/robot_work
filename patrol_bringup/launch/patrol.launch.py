@@ -16,10 +16,15 @@ def generate_launch_description() -> LaunchDescription:
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
     max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
     obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
-    obstacle_a_x_arg = DeclareLaunchArgument("obstacle_a_x", default_value="-3.0")
-    obstacle_a_y_arg = DeclareLaunchArgument("obstacle_a_y", default_value="0.95")
-    obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="-1.0")
-    obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="0.95")
+    use_path_planner_arg = DeclareLaunchArgument("use_path_planner", default_value="true")
+    grid_resolution_arg = DeclareLaunchArgument("grid_resolution", default_value="0.10")
+    wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.25")
+    lookahead_distance_arg = DeclareLaunchArgument("lookahead_distance", default_value="0.7")
+    plan_interval_arg = DeclareLaunchArgument("plan_interval", default_value="1.0")
+    obstacle_a_x_arg = DeclareLaunchArgument("obstacle_a_x", default_value="3.974")
+    obstacle_a_y_arg = DeclareLaunchArgument("obstacle_a_y", default_value="5.786")
+    obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="4.024")
+    obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="3.836")
     obstacle_speed_arg = DeclareLaunchArgument("obstacle_speed", default_value="0.3")
     nav2_params_arg = DeclareLaunchArgument(
         "nav2_params",
@@ -87,6 +92,21 @@ def generate_launch_description() -> LaunchDescription:
                         "obstacle_stop_distance": ParameterValue(
                             LaunchConfiguration("obstacle_stop_distance"), value_type=float
                         ),
+                        "use_path_planner": ParameterValue(
+                            LaunchConfiguration("use_path_planner"), value_type=bool
+                        ),
+                        "grid_resolution": ParameterValue(
+                            LaunchConfiguration("grid_resolution"), value_type=float
+                        ),
+                        "wall_inflation": ParameterValue(
+                            LaunchConfiguration("wall_inflation"), value_type=float
+                        ),
+                        "lookahead_distance": ParameterValue(
+                            LaunchConfiguration("lookahead_distance"), value_type=float
+                        ),
+                        "plan_interval": ParameterValue(
+                            LaunchConfiguration("plan_interval"), value_type=float
+                        ),
                     }
                 ],
             ),
@@ -111,6 +131,11 @@ def generate_launch_description() -> LaunchDescription:
             use_sim_time_arg,
             max_linear_arg,
             obstacle_stop_distance_arg,
+            use_path_planner_arg,
+            grid_resolution_arg,
+            wall_inflation_arg,
+            lookahead_distance_arg,
+            plan_interval_arg,
             obstacle_a_x_arg,
             obstacle_a_y_arg,
             obstacle_b_x_arg,

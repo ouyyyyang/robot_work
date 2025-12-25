@@ -18,10 +18,10 @@ def generate_launch_description() -> LaunchDescription:
 
     world_arg = DeclareLaunchArgument("world", default_value=world_default)
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
-    robot_x_arg = DeclareLaunchArgument("robot_x", default_value="-2.5")
-    robot_y_arg = DeclareLaunchArgument("robot_y", default_value="0.95")
+    robot_x_arg = DeclareLaunchArgument("robot_x", default_value="1.482")
+    robot_y_arg = DeclareLaunchArgument("robot_y", default_value="5.779")
     robot_z_arg = DeclareLaunchArgument("robot_z", default_value="0.0")
-    robot_yaw_arg = DeclareLaunchArgument("robot_yaw", default_value="0.0")
+    robot_yaw_arg = DeclareLaunchArgument("robot_yaw", default_value="-0.965")
 
     set_model_path = SetEnvironmentVariable(
         name="GAZEBO_MODEL_PATH",

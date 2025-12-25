@@ -3109,7 +3109,7 @@
     <!-- ================= Patrol marking points ================= -->
     <model name="patrol_point_1">
       <static>true</static>
-      <pose>-6.5 -3.0 0.1 0 0 0</pose>
+      <pose>4.402 4.340 0.1 0 0 0</pose>
       <link name="patrol_point_1_link">
         <visual name="patrol_point_1_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
@@ -3124,7 +3124,7 @@
 
     <model name="patrol_point_2">
       <static>true</static>
-      <pose>-2.0 -5.0 0.1 0 0 0</pose>
+      <pose>7.102 0.440 0.1 0 0 0</pose>
       <link name="patrol_point_2_link">
         <visual name="patrol_point_2_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
@@ -3139,7 +3139,7 @@
 
     <model name="patrol_point_3">
       <static>true</static>
-      <pose>3.0 -4.0 0.1 0 0 0</pose>
+      <pose>3.102 -2.360 0.1 0 0 0</pose>
       <link name="patrol_point_3_link">
         <visual name="patrol_point_3_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
@@ -3154,7 +3154,7 @@
 
     <model name="patrol_point_4">
       <static>true</static>
-      <pose>6.5 1.5 0.1 0 0 0</pose>
+      <pose>-3.148 -2.810 0.1 0 0 0</pose>
       <link name="patrol_point_4_link">
         <visual name="patrol_point_4_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
@@ -3169,7 +3169,7 @@
 
     <model name="patrol_point_5">
       <static>true</static>
-      <pose>-1.5 4.0 0.1 0 0 0</pose>
+      <pose>-6.248 -5.460 0.1 0 0 0</pose>
       <link name="patrol_point_5_link">
         <visual name="patrol_point_5_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>

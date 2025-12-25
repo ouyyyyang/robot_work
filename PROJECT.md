@@ -154,11 +154,11 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 | 点位 | 局部坐标 (x,y,z) |
 |---|---|
-| patrol_point_1 | (-6.5, -3.0, 0.1) |
-| patrol_point_2 | (-2.0, -5.0, 0.1) |
-| patrol_point_3 | ( 3.0, -4.0, 0.1) |
-| patrol_point_4 | ( 6.5,  1.5, 0.1) |
-| patrol_point_5 | (-1.5,  4.0, 0.1) |
+| patrol_point_1 | ( 4.402,  4.340, 0.1) |
+| patrol_point_2 | ( 7.102,  0.440, 0.1) |
+| patrol_point_3 | ( 3.102, -2.360, 0.1) |
+| patrol_point_4 | (-3.148, -2.810, 0.1) |
+| patrol_point_5 | (-6.248, -5.460, 0.1) |
 
 环境模型自身在 world 中的 pose（`models/patrol_environment/model.sdf` 顶部）：
 
@@ -183,11 +183,11 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 | 障碍物 | 初始 pose (x,y,z) |
 |---|---|
-| obstacle_1 | (-4.0, -4.0, 0.25) |
-| obstacle_2 | (-1.0, -2.0, 0.25) |
-| obstacle_3 | ( 2.0, -1.5, 0.25) |
-| obstacle_4 | ( 4.5,  1.5, 0.25) |
-| obstacle_5 | ( 0.0,  3.0, 0.25) |
+| obstacle_1 | ( 3.974,  5.786, 0.25) |
+| obstacle_2 | ( 4.524, -0.914, 0.25) |
+| obstacle_3 | ( 0.174, -2.414, 0.25) |
+| obstacle_4 | (-3.726, -2.014, 0.25) |
+| obstacle_5 | (-8.776, -2.864, 0.25) |
 
 ---
 
@@ -200,7 +200,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
   - 设置 `GAZEBO_MODEL_PATH` 指向安装后的 `patrol_bringup/models`
   - 通过 `gazebo_ros/spawn_entity.py` 生成机器人
   - 机器人初始位置参数：
-    - `robot_x=-2.5`、`robot_y=0.95`、`robot_z=0.0`、`robot_yaw=0.0`
+    - `robot_x=1.482`、`robot_y=5.779`、`robot_z=0.0`、`robot_yaw=-0.965`
 
 - `patrol_bringup/launch/patrol.launch.py`
   - 包含 `gazebo.launch.py`
@@ -228,7 +228,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
   - 若 `mean_b / mean_r >= 1.25` → `normal`（蓝）
   - 否则 → `unknown`
 
-### 7.3 节点：`patrol_manager`（巡检顺序控制 + 简单避障）
+### 7.3 节点：`patrol_manager`（巡检顺序控制 + 墙体路径规划 + 简单避障）
 
 文件：`patrol_control/patrol_control/patrol_manager.py`
 
@@ -246,7 +246,17 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 - 启动时解析 `models/patrol_environment/model.sdf` 内的 `patrol_point_1..5` pose
 - 结合 `patrol_environment.pose` 计算得到 world 坐标（目前 yaw=0，等价平移）
 
-运动控制算法（纯几何/P 控制，默认参数）：
+运动控制算法（默认启用“墙体路径规划”）：
+
+- 读取 `Wall_*` 的碰撞盒，构建 2D 栅格占用图（`grid_resolution`、`wall_inflation`、`grid_margin`）
+- 自动选择“赛道区域”：
+  - 优先取 **不接触栅格边界的连通域**（封闭区域），并以“直径（double-BFS）最大”的连通域作为赛道范围
+  - 若不存在封闭区域，则退化为选择 **最大 free-space 连通域**
+- 规划：
+  - 以当前位姿为起点、当前巡检点为终点做 **A\*** 路径规划（周期 `plan_interval` 重新规划）
+- 跟踪：
+  - 在规划路径上选取 `lookahead_distance` 前瞻点
+  - 用 P 控制输出 `/cmd_vel` 跟踪前瞻点
 
 - 到目标点距离：`dist = hypot(dx, dy)`
 - 目标航向：`target = atan2(dy, dx)`
@@ -274,6 +284,14 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 - `goal_tolerance=0.35`
 - `k_linear=0.6`，`max_linear=0.35`
 - `k_angular=1.8`，`max_angular=1.2`
+- 路径规划：
+  - `use_path_planner=true`
+  - `grid_resolution=0.10`
+  - `wall_inflation=0.25`
+  - `grid_margin=1.0`
+  - `plan_interval=1.0`
+  - `lookahead_distance=0.7`
+  - `waypoint_tolerance=0.35`
 - `obstacle_stop_distance=0.45`
 - `avoid_turn_angular=1.0`
 
@@ -333,7 +351,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 本项目当前 **未直接使用 ROS2 Action**：
 
-- `patrol_manager` 采用直接发布 `/cmd_vel` 的点到点控制（非 Nav2 action）。
+- `patrol_manager` 采用“内部 A* 规划 + `/cmd_vel` 跟踪”的方式（非 Nav2 action）。
 - `patrol.launch.py` 中留有 Nav2 bringup 的入口，但要真正使用 Nav2（如 `NavigateToPose` action），需要你补地图/定位/代价地图等配置。
 
 ---
@@ -358,7 +376,7 @@ ros2 launch patrol_bringup patrol.launch.py
 
 ```bash
 ros2 launch patrol_bringup patrol.launch.py \
-  obstacle_a_x:=-3.0 obstacle_a_y:=0.95 \
-  obstacle_b_x:=-1.0 obstacle_b_y:=0.95 \
+  obstacle_a_x:=3.974 obstacle_a_y:=5.786 \
+  obstacle_b_x:=4.024 obstacle_b_y:=3.836 \
   obstacle_speed:=0.4
 ```
