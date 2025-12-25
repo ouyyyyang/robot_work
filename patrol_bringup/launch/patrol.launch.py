@@ -43,6 +43,12 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="patrol_control",
+                executable="scan_to_range",
+                output="screen",
+                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+            ),
+            Node(
+                package="patrol_control",
                 executable="obstacle_controller",
                 output="screen",
                 parameters=[

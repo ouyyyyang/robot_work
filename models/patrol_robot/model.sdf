@@ -320,14 +320,13 @@
             <resolution>0.01</resolution>
           </range>
         </ray>
-        <plugin name="ultrasonic_plugin" filename="libgazebo_ros_range.so">
+        <plugin name="ultrasonic_plugin" filename="libgazebo_ros_ray_sensor.so">
           <ros>
             <namespace>/patrol_robot</namespace>
+            <remapping>~/out:=ultrasonic/scan</remapping>
           </ros>
-          <radiation_type>ultrasound</radiation_type>
+          <output_type>sensor_msgs/LaserScan</output_type>
           <frame_name>ultrasonic_link</frame_name>
-          <topic_name>ultrasonic/range</topic_name>
-          <fov>0.2</fov>
         </plugin>
       </sensor>
     </link>

@@ -100,11 +100,11 @@ Gazebo-ROS 插件：
 
 Gazebo-ROS 插件：
 
-- 插件：`libgazebo_ros_range.so`
-- `radiation_type`：`ultrasound`
+- 插件：`libgazebo_ros_ray_sensor.so`（发布 `LaserScan`，单束）
 - 命名空间：`/patrol_robot`
 - 发布话题：
-  - `/patrol_robot/ultrasonic/range`（`sensor_msgs/Range`）
+  - `/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`）
+  - `/patrol_robot/ultrasonic/range`（`sensor_msgs/Range`，由 `patrol_control/scan_to_range` 转换得到）
 - TF frame：`ultrasonic_link`
 
 ---
@@ -274,6 +274,20 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 - `k_angular=1.8`，`max_angular=1.2`
 - `obstacle_stop_distance=0.45`
 - `avoid_turn_angular=1.0`
+
+### 7.3.1 节点：`scan_to_range`（超声 LaserScan → Range）
+
+文件：`patrol_control/patrol_control/scan_to_range.py`
+
+- 订阅：
+  - `/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`）
+- 发布：
+  - `/patrol_robot/ultrasonic/range`（`sensor_msgs/Range`）
+
+转换规则（默认）：
+
+- 优先取 `LaserScan.ranges` 的中间束；无效时取所有有限值的最小值；全部无效则取 `range_max`。
+- `radiation_type = ULTRASOUND`，`field_of_view` 优先用 `|angle_max-angle_min|`，否则用 `default_fov=0.2`。
 
 ### 7.4 节点：`obstacle_controller`（动态障碍两点往返）
 

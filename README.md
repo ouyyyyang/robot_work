@@ -15,16 +15,45 @@
 
 - ROS2 Humble
 - Gazebo Classic (gazebo11) + `gazebo_ros_pkgs`
+- `colcon`（需要带 ROS 扩展：`python3-colcon-common-extensions` / `python3-colcon-ros`）
 - Python3 + `rclpy`
 - `python3-numpy`（`vision_checker` 使用）
 
 ## 构建
 
-在你的 ROS2 工作空间里（或把本工程作为 workspace 根目录）：
+你需要在“工作空间根目录”（会生成 `build/ install/ log/` 的地方）运行 `colcon build`，不要在 `src/` 里运行。
+
+### 方式 A：标准 ROS2 工作空间（推荐）
+
+目录结构示例：
+
+```
+~/patrol_ws/
+  src/
+    robot_work/   (本仓库)
+```
+
+命令（注意 `cd` 的路径）：
 
 ```bash
+mkdir -p ~/patrol_ws/src
+cd ~/patrol_ws/src
+git clone https://github.com/ouyyyyang/robot_work.git
+
+cd ~/patrol_ws
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
+source install/setup.bash
+```
+
+### 方式 B：把本仓库当作工作空间根目录（不推荐但可用）
+
+如果你就是在 `~/Desktop/robot_work`（本仓库根目录）下开发，也可以直接在这里构建，但需要显式告诉 colcon 去哪些目录找包：
+
+```bash
+cd ~/Desktop/robot_work
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --base-paths patrol_bringup patrol_control
 source install/setup.bash
 ```
 
@@ -41,6 +70,8 @@ ros2 launch patrol_bringup gazebo.launch.py
 启动整套系统（Gazebo + 控制节点，Nav2 默认关闭）：
 
 ```bash
+cd ~/patrol_ws   # 或 cd ~/Desktop/robot_work（取决于你用哪种方式构建）
+source install/setup.bash
 ros2 launch patrol_bringup patrol.launch.py
 ```
 
@@ -62,7 +93,8 @@ gazebo --verbose worlds/patrol_world.sdf
 - 机器人速度：`/patrol_robot/cmd_vel`
 - 里程计：`/patrol_robot/odom`
 - 相机：`/patrol_robot/front_camera/image_raw`
-- 超声：`/patrol_robot/ultrasonic/range`
+- 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
+- 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，单束）
 - 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色）
 
 ## 动态障碍（两点往返）
@@ -93,3 +125,106 @@ ros2 run patrol_control obstacle_controller --ros-args \
 
 - 蓝色：`normal`
 - 红色：`abnormal`
+
+## 常见问题
+
+### 1) `ros2 launch` 提示 `package 'patrol_bringup' not found`
+
+这表示当前终端没有加载到你的工作空间 overlay（`~/patrol_ws/install`）。按顺序执行：
+
+```bash
+cd ~/patrol_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+echo "$AMENT_PREFIX_PATH" | tr ':' '\n' | head -n 10
+ros2 pkg list | grep patrol
+```
+
+如果仍然找不到包，先确认 colcon 把它识别成 ROS2 的 `ament_python` 包（正常应该显示 `ament_python`，而不是 `python`）：
+
+```bash
+cd ~/patrol_ws
+colcon list --base-paths src | grep patrol
+```
+
+如果你看到的是 `(python)`：
+
+- 先确认 colcon 的 ROS 扩展存在：
+
+```bash
+python3 -c "import colcon_ros; print('colcon_ros ok')"
+```
+
+- 如果扩展不存在，在 Ubuntu 上安装并重新打开终端：
+
+```bash
+sudo apt update
+sudo apt install -y python3-colcon-common-extensions
+```
+
+- 如果扩展存在但仍是 `(python)`，通常是 `package.xml` 不符合 ROS2 规范导致解析失败（例如 `maintainer` 的 `email` 为空）。可用下面命令检查：
+
+```bash
+python3 -c "from catkin_pkg.package import parse_package; parse_package('src/robot_work/patrol_bringup/package.xml'); print('patrol_bringup ok')"
+python3 -c "from catkin_pkg.package import parse_package; parse_package('src/robot_work/patrol_control/package.xml'); print('patrol_control ok')"
+```
+
+然后清理重建：
+
+```bash
+cd ~/patrol_ws
+rm -rf build install log
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --merge-install
+source install/setup.bash
+ros2 pkg list | grep patrol
+```
+
+如果 `AMENT_PREFIX_PATH` 仍然只有 `/opt/ros/humble`，再试：
+
+```bash
+source install/local_setup.bash
+echo "$AMENT_PREFIX_PATH" | tr ':' '\n' | head -n 10
+ros2 pkg list | grep patrol
+```
+
+仍不行的话，建议用合并安装重新构建（避免 isolated-install 链接环境失败）：
+
+```bash
+cd ~/patrol_ws
+rm -rf build install log
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --merge-install
+source install/setup.bash
+ros2 pkg list | grep patrol
+```
+
+如果你的 shell 是 zsh，请改用：
+
+```bash
+source /opt/ros/humble/setup.zsh
+source install/setup.zsh
+```
+
+### 2) Gazebo 报 `Failed to load plugin libgazebo_ros_*.so`
+
+例如：
+
+- `libgazebo_ros_diff_drive.so`
+- `libgazebo_ros_camera.so`
+- `libgazebo_ros_ray_sensor.so`
+
+这表示 Gazebo 找不到对应的 ROS-Gazebo 插件库（通常是没有装 `gazebo_plugins`）。
+
+在 Ubuntu (Humble) 上安装：
+
+```bash
+sudo apt update
+sudo apt install -y ros-humble-gazebo-ros-pkgs ros-humble-gazebo-plugins
+```
+
+验证插件文件是否存在：
+
+```bash
+ls /opt/ros/humble/lib | grep -E "libgazebo_ros_(diff_drive|camera|range)\\.so"
+```
