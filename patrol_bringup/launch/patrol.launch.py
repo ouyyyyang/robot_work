@@ -14,6 +14,8 @@ def generate_launch_description() -> LaunchDescription:
 
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="false")
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
+    max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
+    obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
     obstacle_a_x_arg = DeclareLaunchArgument("obstacle_a_x", default_value="-3.0")
     obstacle_a_y_arg = DeclareLaunchArgument("obstacle_a_y", default_value="0.95")
     obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="-1.0")
@@ -76,7 +78,17 @@ def generate_launch_description() -> LaunchDescription:
                 package="patrol_control",
                 executable="patrol_manager",
                 output="screen",
-                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "max_linear": ParameterValue(
+                            LaunchConfiguration("max_linear"), value_type=float
+                        ),
+                        "obstacle_stop_distance": ParameterValue(
+                            LaunchConfiguration("obstacle_stop_distance"), value_type=float
+                        ),
+                    }
+                ],
             ),
         ]
     )
@@ -97,6 +109,8 @@ def generate_launch_description() -> LaunchDescription:
         [
             use_nav2_arg,
             use_sim_time_arg,
+            max_linear_arg,
+            obstacle_stop_distance_arg,
             obstacle_a_x_arg,
             obstacle_a_y_arg,
             obstacle_b_x_arg,

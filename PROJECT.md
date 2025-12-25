@@ -41,8 +41,8 @@
 - 轮子形状：圆柱 cylinder
 - 半径：0.05 m
 - 宽度（length）：0.02 m
-- 左轮中心位姿：`(0, +0.16, 0.05)`
-- 右轮中心位姿：`(0, -0.16, 0.05)`
+- 左轮中心位姿：`(0.16, +0.16, 0.05)`
+- 右轮中心位姿：`(0.16, -0.16, 0.05)`
 - 轮子关节：
   - `left_wheel_joint`：revolute（轴向 `xyz=0 1 0`）
   - `right_wheel_joint`：revolute（轴向 `xyz=0 1 0`）
@@ -51,7 +51,7 @@
 
 - 形状：球体 sphere
 - 半径：0.04 m
-- 中心位姿：`(-0.27, 0, 0.04)`
+- 中心位姿：`(-0.20, 0, 0.04)`
 - 关节：`caster_wheel_joint`（ball）
 
 ---
@@ -94,9 +94,11 @@ Gazebo-ROS 插件：
 测距参数：
 
 - `min`：0.02 m
-- `max`：4.0 m
+- `max`：8.0 m
 - `resolution`：0.01 m
 - 更新频率：20 Hz
+- 水平视场角（约）：0.5 rad（`-0.25` ~ `+0.25`）
+- 射线束数：9（`samples=9`）
 
 Gazebo-ROS 插件：
 
@@ -286,7 +288,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 转换规则（默认）：
 
-- 优先取 `LaserScan.ranges` 的中间束；无效时取所有有限值的最小值；全部无效则取 `range_max`。
+- 取 `LaserScan.ranges` 中所有有限值的最小值；全部无效则取 `range_max`。
 - `radiation_type = ULTRASOUND`，`field_of_view` 优先用 `|angle_max-angle_min|`，否则用 `default_fov=0.2`。
 
 ### 7.4 节点：`obstacle_controller`（动态障碍两点往返）

@@ -34,10 +34,6 @@ class ScanToRange(Node):
         if not scan.ranges:
             return None
 
-        center = scan.ranges[len(scan.ranges) // 2]
-        if self._is_valid_range(center):
-            return float(center)
-
         finite = [r for r in scan.ranges if self._is_valid_range(r)]
         if finite:
             return float(min(finite))
@@ -84,4 +80,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

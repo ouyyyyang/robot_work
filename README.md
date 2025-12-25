@@ -75,6 +75,14 @@ source install/setup.bash
 ros2 launch patrol_bringup patrol.launch.py
 ```
 
+调快巡逻速度 / 提前避障（示例）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py \
+  max_linear:=0.6 \
+  obstacle_stop_distance:=0.7
+```
+
 可选启用 Nav2（需要你补齐定位/地图/TF 等配置）：
 
 ```bash

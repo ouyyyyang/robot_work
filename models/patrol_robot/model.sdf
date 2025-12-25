@@ -39,7 +39,7 @@
 
     <!-- Left wheel -->
     <link name="left_wheel_link">
-      <pose>0 0.16 0.05 0 0 0</pose>
+      <pose>0.16 0.16 0.05 0 0 0</pose>
       <inertial>
         <mass>0.5</mass>
         <inertia>
@@ -97,7 +97,7 @@
 
     <!-- Right wheel -->
     <link name="right_wheel_link">
-      <pose>0 -0.16 0.05 0 0 0</pose>
+      <pose>0.16 -0.16 0.05 0 0 0</pose>
       <inertial>
         <mass>0.5</mass>
         <inertia>
@@ -155,7 +155,7 @@
 
     <!-- Caster (omni) wheel -->
     <link name="caster_wheel_link">
-      <pose>-0.27 0 0.04 0 0 0</pose>
+      <pose>-0.20 0 0.04 0 0 0</pose>
       <inertial>
         <mass>0.2</mass>
         <inertia>
@@ -308,15 +308,15 @@
         <ray>
           <scan>
             <horizontal>
-              <samples>1</samples>
+              <samples>9</samples>
               <resolution>1</resolution>
-              <min_angle>0</min_angle>
-              <max_angle>0</max_angle>
+              <min_angle>-0.25</min_angle>
+              <max_angle>0.25</max_angle>
             </horizontal>
           </scan>
           <range>
             <min>0.02</min>
-            <max>4.0</max>
+            <max>8.0</max>
             <resolution>0.01</resolution>
           </range>
         </ray>
