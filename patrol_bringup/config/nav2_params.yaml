@@ -1,0 +1,16 @@
+# Placeholder Nav2 parameters.
+# This file is intentionally minimal; Nav2 needs map + localization + costmaps,
+# which depend on your final sensor/TF setup.
+#
+# patrol.launch.py supports enabling Nav2 with:
+#   ros2 launch patrol_bringup patrol.launch.py use_nav2:=true
+#
+# Use the official nav2_bringup params as a base and adapt:
+#   - base_frame: base_link
+#   - odom_frame: odom
+#   - use_sim_time: true
+#
+/**:
+  ros__parameters:
+    use_sim_time: true
+

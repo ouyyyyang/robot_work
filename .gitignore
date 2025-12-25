@@ -1,0 +1,38 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+
+# Codex / local caches (optional)
+.pycache/
+
+# ===== ROS2 / colcon (generated) =====
+build/
+install/
+log/
+.colcon/
+
+# ===== ROS bag / recorded data (generated) =====
+rosbag2_*/
+*.db3
+*.mcap
+*.bag
+
+# ===== Misc =====
+*.tmp
+*.log

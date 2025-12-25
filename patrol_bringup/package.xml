@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>patrol_bringup</name>
+  <version>0.1.0</version>
+  <description>Bringup (Gazebo + optional Nav2) for the patrol robot simulation.</description>
+
+  <maintainer email="">oyzh</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- Optional (used by patrol.launch.py when enabled) -->
+  <exec_depend>nav2_bringup</exec_depend>
+
+  <exec_depend>patrol_control</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+</package>
+

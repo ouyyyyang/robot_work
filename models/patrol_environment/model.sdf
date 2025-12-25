@@ -3113,7 +3113,11 @@
       <link name="patrol_point_1_link">
         <visual name="patrol_point_1_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material><ambient>0 1 0 1</ambient></material>
+          <material>
+            <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
+            <emissive>0 0 0.3 1</emissive>
+          </material>
         </visual>
       </link>
     </model>
@@ -3124,7 +3128,11 @@
       <link name="patrol_point_2_link">
         <visual name="patrol_point_2_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material><ambient>0 1 0 1</ambient></material>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+            <emissive>0.3 0 0 1</emissive>
+          </material>
         </visual>
       </link>
     </model>
@@ -3135,7 +3143,11 @@
       <link name="patrol_point_3_link">
         <visual name="patrol_point_3_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material><ambient>0 1 0 1</ambient></material>
+          <material>
+            <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
+            <emissive>0 0 0.3 1</emissive>
+          </material>
         </visual>
       </link>
     </model>
@@ -3146,7 +3158,11 @@
       <link name="patrol_point_4_link">
         <visual name="patrol_point_4_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material><ambient>0 1 0 1</ambient></material>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+            <emissive>0.3 0 0 1</emissive>
+          </material>
         </visual>
       </link>
     </model>
@@ -3157,7 +3173,11 @@
       <link name="patrol_point_5_link">
         <visual name="patrol_point_5_visual">
           <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material><ambient>0 1 0 1</ambient></material>
+          <material>
+            <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
+            <emissive>0 0 0.3 1</emissive>
+          </material>
         </visual>
       </link>
     </model>
