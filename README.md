@@ -140,7 +140,7 @@ gazebo --verbose worlds/patrol_world.sdf
 - 里程计：`/patrol_robot/odom`
 - 相机：`/patrol_robot/front_camera/image_raw`
 - 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
-- 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，9 束，约 0.5rad 视场角）
+- 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，61 束，约 πrad 视场角（车头前方半圆））
 - 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色）
 
 ## RViz2 可视化
@@ -160,12 +160,13 @@ ros2 launch patrol_bringup patrol.launch.py
 cd ~/patrol_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-rviz2
+rviz2 --ros-args -p use_sim_time:=true
 ```
 
 RViz2 里建议这样配置：
 
 - `Fixed Frame` 设为 `odom`
+- `Global Options -> Use Sim Time` 设为 `true`（否则 TF 会因为时间戳不匹配而显示不出来）
 - Add → `TF`（看 TF 树）
 - Add → `Odometry`，Topic 选 `/patrol_robot/odom`
 - Add → `LaserScan`，Topic 选 `/patrol_robot/ultrasonic/scan`
@@ -174,6 +175,30 @@ RViz2 里建议这样配置：
 - Add → `MarkerArray`，Topic 选 `/patrol/markers`（显示墙体/巡检点/障碍物）
 
 说明：`gazebo.launch.py` 会启动 `robot_state_publisher`（发布机器人各 link 的 TF）和 `/joint_states`（轮子随运动转动），所以 RViz2 可以看到完整机器人模型与传感器 TF。
+提示：如果你把 `Fixed Frame` 设为 `map`，但没有启动 Nav2/SLAM（没有 `map->odom` TF），RViz2 会显示不出来，这是正常的。
+
+### RViz2 看不到 RobotModel/场地（Marker）怎么排查
+
+在 RViz2 打开着的情况下，新开一个终端执行（目录无所谓）：
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/patrol_ws/install/setup.bash
+
+ros2 node list | grep -E "robot_state_publisher|environment_markers|wheel_joint_state_publisher"
+ros2 topic list | grep -E "^/tf$|^/tf_static$|^/joint_states$|^/patrol/markers$|^/clock$"
+ros2 param get /robot_state_publisher robot_description | head
+ros2 topic echo /patrol/markers --once
+ros2 run tf2_ros tf2_echo odom base_link
+```
+
+只要上面能看到：
+
+- `/robot_state_publisher` 的 `robot_description` 有内容
+- `odom -> base_link` TF 能正常输出
+- `/patrol/markers` 能 echo 到 MarkerArray
+
+那么 RViz2 里把 `Fixed Frame` 设为 `odom`，并开启 `Use Sim Time=true`，RobotModel/MarkerArray 就应该能显示。
 
 ## 巡逻路径规划（基于墙体）
 
