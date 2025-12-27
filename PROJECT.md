@@ -277,7 +277,8 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 - 当 `dist <= goal_tolerance`：
   - 停车并停留 `dwell_time` 秒（默认 2s），期间持续接收 `vision_checker` 的结果
-  - 到时后记录（log）该点状态并切换到下一个点（若未得到 `normal/abnormal`，记录 `unknown` 但不会卡住）
+- 到时后记录（log）该点状态并切换到下一个点（若未得到 `normal/abnormal`，记录 `unknown` 但不会卡住）
+  - 到时后记录（log）该点状态并切换到下一个点（若未得到视觉结果，默认记录为 `abnormal`，保证始终只有两类输出）
 
 避障算法（反应式，默认参数）：
 
@@ -294,11 +295,14 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 - 路径规划：
   - `use_path_planner=true`
   - `grid_resolution=0.10`
-  - `wall_inflation=0.25`
+  - `wall_inflation=0.20`
   - `grid_margin=1.0`
   - `plan_interval=1.0`
   - `lookahead_distance=0.7`
   - `waypoint_tolerance=0.35`
+  - 动态障碍纳入规划：
+    - `use_dynamic_obstacles=true`
+    - `obstacle_inflation=0.20`
 - `obstacle_stop_distance=0.45`
 - `avoid_turn_angular=1.0`
 

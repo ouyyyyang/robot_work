@@ -41,9 +41,13 @@ def generate_launch_description() -> LaunchDescription:
     vision_publish_interval_arg = DeclareLaunchArgument("vision_publish_interval", default_value="0.2")
     use_path_planner_arg = DeclareLaunchArgument("use_path_planner", default_value="true")
     grid_resolution_arg = DeclareLaunchArgument("grid_resolution", default_value="0.10")
-    wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.25")
+    wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.20")
     lookahead_distance_arg = DeclareLaunchArgument("lookahead_distance", default_value="0.7")
     plan_interval_arg = DeclareLaunchArgument("plan_interval", default_value="1.0")
+    use_dynamic_obstacles_arg = DeclareLaunchArgument("use_dynamic_obstacles", default_value="true")
+    obstacle_inflation_arg = DeclareLaunchArgument("obstacle_inflation", default_value="0.20")
+    scan_goal_align_weight_arg = DeclareLaunchArgument("scan_goal_align_weight", default_value="0.60")
+    scan_prev_align_weight_arg = DeclareLaunchArgument("scan_prev_align_weight", default_value="0.30")
     obstacle_a_x_arg = DeclareLaunchArgument("obstacle_a_x", default_value="3.724")
     obstacle_a_y_arg = DeclareLaunchArgument("obstacle_a_y", default_value="4.986")
     obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="2.824")
@@ -203,6 +207,18 @@ def generate_launch_description() -> LaunchDescription:
                         "plan_interval": ParameterValue(
                             LaunchConfiguration("plan_interval"), value_type=float
                         ),
+                        "use_dynamic_obstacles": ParameterValue(
+                            LaunchConfiguration("use_dynamic_obstacles"), value_type=bool
+                        ),
+                        "obstacle_inflation": ParameterValue(
+                            LaunchConfiguration("obstacle_inflation"), value_type=float
+                        ),
+                        "scan_goal_align_weight": ParameterValue(
+                            LaunchConfiguration("scan_goal_align_weight"), value_type=float
+                        ),
+                        "scan_prev_align_weight": ParameterValue(
+                            LaunchConfiguration("scan_prev_align_weight"), value_type=float
+                        ),
                     }
                 ],
             ),
@@ -255,6 +271,10 @@ def generate_launch_description() -> LaunchDescription:
             wall_inflation_arg,
             lookahead_distance_arg,
             plan_interval_arg,
+            use_dynamic_obstacles_arg,
+            obstacle_inflation_arg,
+            scan_goal_align_weight_arg,
+            scan_prev_align_weight_arg,
             obstacle_a_x_arg,
             obstacle_a_y_arg,
             obstacle_b_x_arg,

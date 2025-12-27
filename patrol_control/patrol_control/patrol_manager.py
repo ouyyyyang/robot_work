@@ -9,6 +9,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 import rclpy
 from ament_index_python.packages import get_package_share_directory
+from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -101,6 +102,7 @@ class _WallGrid:
         self._occ = [False] * (self._nx * self._ny)
         self._build_occupancy()
         self._free_mask = self._select_track_component()
+        self._dyn_occ = [False] * (self._nx * self._ny)
 
     @property
     def resolution(self) -> float:
@@ -230,7 +232,30 @@ class _WallGrid:
         return self._cell_center(i, j)
 
     def _is_free(self, cell_id: int) -> bool:
-        return (not self._occ[cell_id]) and self._free_mask[cell_id]
+        return (not self._occ[cell_id]) and (not self._dyn_occ[cell_id]) and self._free_mask[cell_id]
+
+    def clear_dynamic(self) -> None:
+        if any(self._dyn_occ):
+            self._dyn_occ = [False] * (self._nx * self._ny)
+
+    def set_dynamic_rects(self, rects: List[_Rect2D]) -> None:
+        self._dyn_occ = [False] * (self._nx * self._ny)
+        if not rects:
+            return
+        for rect in rects:
+            ax0, ay0, ax1, ay1 = rect.aabb()
+            i0 = max(0, int((ax0 - self._min_x) / self._res) - 1)
+            j0 = max(0, int((ay0 - self._min_y) / self._res) - 1)
+            i1 = min(self._nx - 1, int((ax1 - self._min_x) / self._res) + 1)
+            j1 = min(self._ny - 1, int((ay1 - self._min_y) / self._res) + 1)
+            for j in range(j0, j1 + 1):
+                for i in range(i0, i1 + 1):
+                    cell_id = self._cell_id(i, j)
+                    if not self._free_mask[cell_id]:
+                        continue
+                    x, y = self._cell_center(i, j)
+                    if rect.contains(x, y):
+                        self._dyn_occ[cell_id] = True
 
     def _nearest_free(self, cell_id: int, *, max_steps: int = 8000) -> Optional[int]:
         if self._is_free(cell_id):
@@ -435,6 +460,36 @@ def load_patrol_points_from_environment_sdf(path: str) -> List[PatrolPoint]:
     return points
 
 
+@dataclass(frozen=True)
+class _ObstacleSpec:
+    x: float
+    y: float
+    yaw: float
+    sx: float
+    sy: float
+
+
+def load_obstacles_from_world_sdf(path: str) -> Dict[str, _ObstacleSpec]:
+    root = ET.parse(path).getroot()
+    world = root.find(".//world")
+    if world is None:
+        return {}
+
+    obstacles: Dict[str, _ObstacleSpec] = {}
+    for model in world.findall("./model"):
+        name = model.attrib.get("name", "")
+        if not name.startswith("obstacle_"):
+            continue
+        pose_el = model.find("./pose")
+        size_el = model.find(".//link/collision/geometry/box/size")
+        if pose_el is None or not pose_el.text or size_el is None or not size_el.text:
+            continue
+        x, y, yaw = _parse_pose_text(pose_el.text)
+        sx, sy, _sz = [float(v) for v in size_el.text.strip().split()]
+        obstacles[name] = _ObstacleSpec(x=x, y=y, yaw=yaw, sx=sx, sy=sy)
+    return obstacles
+
+
 class PatrolManager(Node):
     def __init__(self) -> None:
         super().__init__("patrol_manager")
@@ -446,6 +501,10 @@ class PatrolManager(Node):
         self.declare_parameter("vision_status_topic", "/patrol/vision/status")
         self.declare_parameter("vision_grace_period", 1.0)
         self.declare_parameter("environment_sdf", "")
+        self.declare_parameter("world_sdf", "")
+        self.declare_parameter("model_states_topic", "/gazebo/model_states")
+        self.declare_parameter("use_dynamic_obstacles", True)
+        self.declare_parameter("obstacle_inflation", 0.20)
 
         self.declare_parameter("goal_tolerance", 0.35)
         self.declare_parameter("max_linear", 0.35)
@@ -467,7 +526,7 @@ class PatrolManager(Node):
         self.declare_parameter("use_path_planner", True)
         self.declare_parameter("grid_resolution", 0.10)
         self.declare_parameter("grid_margin", 1.0)
-        self.declare_parameter("wall_inflation", 0.25)
+        self.declare_parameter("wall_inflation", 0.20)
         self.declare_parameter("plan_interval", 1.0)
         self.declare_parameter("lookahead_distance", 0.7)
         self.declare_parameter("waypoint_tolerance", 0.35)
@@ -482,6 +541,8 @@ class PatrolManager(Node):
         self.declare_parameter("scan_front_angle", 0.60)
         self.declare_parameter("scan_side_angle", 1.57)
         self.declare_parameter("scan_min_valid_range", 0.05)
+        self.declare_parameter("scan_goal_align_weight", 0.60)
+        self.declare_parameter("scan_prev_align_weight", 0.30)
 
         cmd_vel_topic = self.get_parameter("cmd_vel_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
@@ -499,6 +560,19 @@ class PatrolManager(Node):
                 "patrol_environment",
                 "model.sdf",
             )
+
+        world_sdf = self.get_parameter("world_sdf").get_parameter_value().string_value
+        if not world_sdf:
+            world_sdf = os.path.join(
+                get_package_share_directory("patrol_bringup"),
+                "worlds",
+                "patrol_world.sdf",
+            )
+        model_states_topic = (
+            self.get_parameter("model_states_topic").get_parameter_value().string_value
+        )
+        self._use_dynamic_obstacles = bool(self.get_parameter("use_dynamic_obstacles").value)
+        self._obstacle_inflation = float(self.get_parameter("obstacle_inflation").value)
 
         self._points = load_patrol_points_from_environment_sdf(env_sdf)
         self._idx = 0
@@ -543,6 +617,13 @@ class PatrolManager(Node):
         self._scan_front_angle = float(self.get_parameter("scan_front_angle").value)
         self._scan_side_angle = float(self.get_parameter("scan_side_angle").value)
         self._scan_min_valid = float(self.get_parameter("scan_min_valid_range").value)
+        self._scan_goal_align = float(self.get_parameter("scan_goal_align_weight").value)
+        self._scan_prev_align = float(self.get_parameter("scan_prev_align_weight").value)
+
+        self._obstacle_specs = load_obstacles_from_world_sdf(world_sdf)
+        self._obstacle_poses: Dict[str, Tuple[float, float, float]] = {
+            name: (spec.x, spec.y, spec.yaw) for name, spec in self._obstacle_specs.items()
+        }
 
         self._grid: Optional[_WallGrid] = None
         if self._use_planner:
@@ -565,6 +646,8 @@ class PatrolManager(Node):
         self.create_subscription(Range, range_topic, self._on_range, 20)
         self.create_subscription(LaserScan, scan_topic, self._on_scan, 20)
         self.create_subscription(String, vision_topic, self._on_vision, 10)
+        if self._use_dynamic_obstacles and self._obstacle_specs:
+            self.create_subscription(ModelStates, model_states_topic, self._on_model_states, 10)
 
         self._pose: Optional[Tuple[float, float, float]] = None
         self._range: Optional[float] = None
@@ -618,6 +701,17 @@ class PatrolManager(Node):
         ):
             self._current_result = self._last_vision
 
+    def _on_model_states(self, msg: ModelStates) -> None:
+        for name, pose in zip(msg.name, msg.pose):
+            key = name.split("::")[-1]
+            if key not in self._obstacle_specs:
+                continue
+            q = pose.orientation
+            siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+            cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+            yaw = math.atan2(siny_cosp, cosy_cosp)
+            self._obstacle_poses[key] = (float(pose.position.x), float(pose.position.y), float(yaw))
+
     def _publish_cmd(self, v: float, w: float) -> None:
         t = Twist()
         t.linear.x = float(v)
@@ -663,12 +757,36 @@ class PatrolManager(Node):
         return None
 
     def _scan_best_angle(
-        self, scan: LaserScan, *, max_abs_angle: float, side: Optional[float] = None
+        self,
+        scan: LaserScan,
+        *,
+        max_abs_angle: float,
+        side: Optional[float] = None,
+        desired_angle: float = 0.0,
+        prev_angle: float = 0.0,
     ) -> float:
+        best_angle, _best_score = self._scan_best_angle_scored(
+            scan,
+            max_abs_angle=max_abs_angle,
+            side=side,
+            desired_angle=desired_angle,
+            prev_angle=prev_angle,
+        )
+        return best_angle
+
+    def _scan_best_angle_scored(
+        self,
+        scan: LaserScan,
+        *,
+        max_abs_angle: float,
+        side: Optional[float],
+        desired_angle: float,
+        prev_angle: float,
+    ) -> Tuple[float, float]:
         if not scan.ranges:
-            return 0.0
+            return 0.0, float("-inf")
         if scan.angle_increment == 0.0:
-            return 0.0
+            return 0.0, float("-inf")
 
         amin = float(scan.angle_min)
         inc = float(scan.angle_increment)
@@ -678,6 +796,10 @@ class PatrolManager(Node):
         best_score = float("-inf")
         best_angle = 0.0
         bias = self._scan_bias
+        goal_w = max(0.0, self._scan_goal_align)
+        prev_w = max(0.0, self._scan_prev_align)
+        desired_angle = _normalize_angle(desired_angle)
+        prev_angle = _normalize_angle(prev_angle)
 
         for i, r in enumerate(scan.ranges):
             rr = float(r)
@@ -691,13 +813,19 @@ class PatrolManager(Node):
                     continue
                 if side < 0.0 and ang > 0.0:
                     continue
+            if rr < self._obs_stop:
+                continue
             forward = max(0.0, math.cos(ang))
             score = rr * (bias + (1.0 - bias) * forward)
+            if goal_w > 0.0:
+                score += goal_w * math.cos(_normalize_angle(ang - desired_angle))
+            if prev_w > 0.0:
+                score += prev_w * math.cos(_normalize_angle(ang - prev_angle))
             if score > best_score:
                 best_score = score
                 best_angle = ang
 
-        return float(best_angle)
+        return float(best_angle), float(best_score)
 
     def _tick(self) -> None:
         if self._idx >= len(self._points):
@@ -785,6 +913,25 @@ class PatrolManager(Node):
                 or (now - self._last_plan_time).nanoseconds * 1e-9 >= max(0.2, self._plan_interval)
             )
             if need_plan:
+                if self._use_dynamic_obstacles and self._obstacle_specs:
+                    rects: List[_Rect2D] = []
+                    for name, spec in self._obstacle_specs.items():
+                        ox, oy, oyaw = self._obstacle_poses.get(name, (spec.x, spec.y, spec.yaw))
+                        hx = spec.sx / 2.0 + self._obstacle_inflation
+                        hy = spec.sy / 2.0 + self._obstacle_inflation
+                        rects.append(
+                            _Rect2D(
+                                cx=ox,
+                                cy=oy,
+                                c=math.cos(oyaw),
+                                s=math.sin(oyaw),
+                                hx=hx,
+                                hy=hy,
+                            )
+                        )
+                    self._grid.set_dynamic_rects(rects)
+                else:
+                    self._grid.clear_dynamic()
                 self._path = self._grid.plan((x, y), (goal.x, goal.y))
                 self._path_idx = 0
                 self._path_goal_idx = self._idx
@@ -895,14 +1042,28 @@ class PatrolManager(Node):
             if goal_blocked:
                 self._pass_clear_since_ns = None
                 if not self._pass_active:
-                    if (
-                        left_min is not None
-                        and right_min is not None
-                        and abs(left_min - right_min) > self._avoid_dir_eps
-                    ):
-                        self._pass_dir = 1.0 if left_min >= right_min else -1.0
-                    else:
+                    left_angle, left_score = self._scan_best_angle_scored(
+                        scan,
+                        max_abs_angle=self._scan_side_angle,
+                        side=1.0,
+                        desired_angle=err,
+                        prev_angle=self._scan_angle_filt,
+                    )
+                    right_angle, right_score = self._scan_best_angle_scored(
+                        scan,
+                        max_abs_angle=self._scan_side_angle,
+                        side=-1.0,
+                        desired_angle=err,
+                        prev_angle=self._scan_angle_filt,
+                    )
+                    if not math.isfinite(left_score) and not math.isfinite(right_score):
                         self._pass_dir = 1.0 if err >= 0.0 else -1.0
+                    elif left_score >= right_score:
+                        self._pass_dir = 1.0
+                        self._scan_angle_filt = left_angle
+                    else:
+                        self._pass_dir = -1.0
+                        self._scan_angle_filt = right_angle
                     self._pass_active = True
             elif self._pass_active:
                 if goal_range is None or goal_range < self._obs_clear:
@@ -918,7 +1079,11 @@ class PatrolManager(Node):
         if scan_available:
             side = self._pass_dir if self._pass_active else None
             scan_angle_raw = self._scan_best_angle(
-                scan, max_abs_angle=self._scan_side_angle, side=side
+                scan,
+                max_abs_angle=self._scan_side_angle,
+                side=side,
+                desired_angle=err,
+                prev_angle=self._scan_angle_filt,
             )
 
         scan_angle = scan_angle_raw
@@ -966,7 +1131,7 @@ class PatrolManager(Node):
         elif abs(w_cmd) > 0.4:
             v_cmd *= 0.6
         if self._turn_in_place_w > 0.0 and abs(w_cmd) >= self._turn_in_place_w:
-            v_cmd = 0.0
+            v_cmd = min(v_cmd, 0.15 * self._max_lin)
 
         v_cmd = max(0.0, min(self._max_lin, v_cmd))
         w_cmd = max(-self._max_ang, min(self._max_ang, w_cmd))
