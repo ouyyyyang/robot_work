@@ -19,6 +19,17 @@
 - Python3 + `rclpy`
 - `python3-numpy`（`vision_checker` 使用）
 
+## 快速开始（推荐流程）
+
+下面以 Ubuntu + ROS2 Humble 为例，按步骤从 0 开始跑起来（每一步都标注了运行目录）。
+
+### 0) 准备工作（只需要做一次）
+
+```bash
+# 任意目录
+source /opt/ros/humble/setup.bash
+```
+
 ## 构建
 
 你需要在“工作空间根目录”（会生成 `build/ install/ log/` 的地方）运行 `colcon build`，不要在 `src/` 里运行。
@@ -36,10 +47,14 @@
 命令（注意 `cd` 的路径）：
 
 ```bash
+# 1) 创建工作空间
 mkdir -p ~/patrol_ws/src
 cd ~/patrol_ws/src
+
+# 2) 拉取代码（把本仓库放到 src 下）
 git clone https://github.com/ouyyyyang/robot_work.git
 
+# 3) 回到工作空间根目录构建（这里会生成 build/ install/ log/）
 cd ~/patrol_ws
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install
@@ -51,6 +66,7 @@ source install/setup.bash
 如果你就是在 `~/Desktop/robot_work`（本仓库根目录）下开发，也可以直接在这里构建，但需要显式告诉 colcon 去哪些目录找包：
 
 ```bash
+# 在仓库根目录构建
 cd ~/Desktop/robot_work
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --base-paths patrol_bringup patrol_control
@@ -64,13 +80,21 @@ source install/setup.bash
 启动 Gazebo 并生成机器人：
 
 ```bash
+# 先加载 overlay（新开一个终端也需要重新 source）
+cd ~/patrol_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
 ros2 launch patrol_bringup gazebo.launch.py
 ```
+
+说明：`gazebo.launch.py` 只负责启动 Gazebo + 生成机器人，不会让车自动巡逻。
 
 启动整套系统（Gazebo + 控制节点，Nav2 默认关闭）：
 
 ```bash
 cd ~/patrol_ws   # 或 cd ~/Desktop/robot_work（取决于你用哪种方式构建）
+source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch patrol_bringup patrol.launch.py
 ```
@@ -89,6 +113,12 @@ ros2 launch patrol_bringup patrol.launch.py \
 ros2 launch patrol_bringup patrol.launch.py dwell_time:=2.0
 ```
 
+巡逻循环（默认开启，跑完 1~5 后回到 1）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py loop_patrol:=true
+```
+
 可选启用 Nav2（需要你补齐定位/地图/TF 等配置）：
 
 ```bash
@@ -98,6 +128,8 @@ ros2 launch patrol_bringup patrol.launch.py use_nav2:=true
 ### 方式 B：直接打开 Gazebo world（不含自动生成机器人）
 
 ```bash
+# 在仓库根目录（包含 models/ 和 worlds/）
+cd ~/Desktop/robot_work
 export GAZEBO_MODEL_PATH="$PWD/models:${GAZEBO_MODEL_PATH}"
 gazebo --verbose worlds/patrol_world.sdf
 ```
@@ -110,6 +142,36 @@ gazebo --verbose worlds/patrol_world.sdf
 - 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
 - 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，9 束，约 0.5rad 视场角）
 - 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色）
+
+## RViz2 可视化
+
+先启动仿真（例如）：
+
+```bash
+cd ~/patrol_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch patrol_bringup patrol.launch.py
+```
+
+再开 RViz2：
+
+```bash
+cd ~/patrol_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+rviz2
+```
+
+RViz2 里建议这样配置：
+
+- `Fixed Frame` 设为 `odom`
+- Add → `TF`（看 TF 树）
+- Add → `Odometry`，Topic 选 `/patrol_robot/odom`
+- Add → `LaserScan`，Topic 选 `/patrol_robot/ultrasonic/scan`
+- Add → `Image`，Topic 选 `/patrol_robot/front_camera/image_raw`
+
+说明：`gazebo.launch.py` 已启动 `static_transform_publisher` 发布 `base_link -> camera_link/ultrasonic_link`，所以 `LaserScan` 可以直接在 RViz2 显示。
 
 ## 巡逻路径规划（基于墙体）
 

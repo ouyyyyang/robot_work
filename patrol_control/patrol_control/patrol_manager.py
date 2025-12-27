@@ -451,6 +451,7 @@ class PatrolManager(Node):
         self.declare_parameter("k_linear", 0.6)
         self.declare_parameter("k_angular", 1.8)
         self.declare_parameter("dwell_time", 2.0)
+        self.declare_parameter("loop_patrol", True)
 
         self.declare_parameter("use_path_planner", True)
         self.declare_parameter("grid_resolution", 0.10)
@@ -488,6 +489,8 @@ class PatrolManager(Node):
         self._k_lin = float(self.get_parameter("k_linear").value)
         self._k_ang = float(self.get_parameter("k_angular").value)
         self._dwell_time = max(0.0, float(self.get_parameter("dwell_time").value))
+        self._loop_patrol = bool(self.get_parameter("loop_patrol").value)
+        self._lap_count = 0
 
         self._use_planner = bool(self.get_parameter("use_path_planner").value)
         self._plan_interval = float(self.get_parameter("plan_interval").value)
@@ -557,8 +560,13 @@ class PatrolManager(Node):
 
     def _tick(self) -> None:
         if self._idx >= len(self._points):
-            self._publish_cmd(0.0, 0.0)
-            return
+            if self._loop_patrol and self._points:
+                self._lap_count += 1
+                self.get_logger().info(f"Completed lap {self._lap_count}, restarting patrol...")
+                self._idx = 0
+            else:
+                self._publish_cmd(0.0, 0.0)
+                return
 
         if self._pose is None:
             return
@@ -585,6 +593,10 @@ class PatrolManager(Node):
             self._waiting_vision = False
             self._dwell_until_ns = None
             self._idx += 1
+            if self._loop_patrol and self._idx >= len(self._points) and self._points:
+                self._lap_count += 1
+                self.get_logger().info(f"Completed lap {self._lap_count}, restarting patrol...")
+                self._idx = 0
             self._path = None
             self._path_goal_idx = None
             self._path_idx = 0

@@ -62,6 +62,23 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
+    # Publish static TFs for RViz2 visualization (SDF links are not automatically in TF tree).
+    # base_link -> camera_link: (0.20, 0, 0.08) because base_link.z=0.10 and camera_link.z=0.18 in model frame.
+    static_tf_camera = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=["0.20", "0.0", "0.08", "0.0", "0.0", "0.0", "base_link", "camera_link"],
+        output="screen",
+    )
+
+    # base_link -> ultrasonic_link: (0.23, 0, 0.00) because both are at z=0.10 in model frame.
+    static_tf_ultrasonic = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=["0.23", "0.0", "0.0", "0.0", "0.0", "0.0", "base_link", "ultrasonic_link"],
+        output="screen",
+    )
+
     return LaunchDescription(
         [
             world_arg,
@@ -73,5 +90,7 @@ def generate_launch_description() -> LaunchDescription:
             set_model_path,
             gazebo,
             spawn_robot,
+            static_tf_camera,
+            static_tf_ultrasonic,
         ]
     )
