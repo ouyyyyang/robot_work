@@ -83,6 +83,12 @@ ros2 launch patrol_bringup patrol.launch.py \
   obstacle_stop_distance:=0.7
 ```
 
+巡检点停留时间（默认 2 秒）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py dwell_time:=2.0
+```
+
 可选启用 Nav2（需要你补齐定位/地图/TF 等配置）：
 
 ```bash

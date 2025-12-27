@@ -16,6 +16,7 @@ def generate_launch_description() -> LaunchDescription:
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
     max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
     obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
+    dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     use_path_planner_arg = DeclareLaunchArgument("use_path_planner", default_value="true")
     grid_resolution_arg = DeclareLaunchArgument("grid_resolution", default_value="0.10")
     wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.25")
@@ -92,6 +93,9 @@ def generate_launch_description() -> LaunchDescription:
                         "obstacle_stop_distance": ParameterValue(
                             LaunchConfiguration("obstacle_stop_distance"), value_type=float
                         ),
+                        "dwell_time": ParameterValue(
+                            LaunchConfiguration("dwell_time"), value_type=float
+                        ),
                         "use_path_planner": ParameterValue(
                             LaunchConfiguration("use_path_planner"), value_type=bool
                         ),
@@ -131,6 +135,7 @@ def generate_launch_description() -> LaunchDescription:
             use_sim_time_arg,
             max_linear_arg,
             obstacle_stop_distance_arg,
+            dwell_time_arg,
             use_path_planner_arg,
             grid_resolution_arg,
             wall_inflation_arg,

@@ -450,6 +450,7 @@ class PatrolManager(Node):
         self.declare_parameter("max_angular", 1.2)
         self.declare_parameter("k_linear", 0.6)
         self.declare_parameter("k_angular", 1.8)
+        self.declare_parameter("dwell_time", 2.0)
 
         self.declare_parameter("use_path_planner", True)
         self.declare_parameter("grid_resolution", 0.10)
@@ -486,6 +487,7 @@ class PatrolManager(Node):
         self._max_ang = float(self.get_parameter("max_angular").value)
         self._k_lin = float(self.get_parameter("k_linear").value)
         self._k_ang = float(self.get_parameter("k_angular").value)
+        self._dwell_time = max(0.0, float(self.get_parameter("dwell_time").value))
 
         self._use_planner = bool(self.get_parameter("use_path_planner").value)
         self._plan_interval = float(self.get_parameter("plan_interval").value)
@@ -521,6 +523,7 @@ class PatrolManager(Node):
         self._last_vision: Optional[str] = None
         self._waiting_vision = False
         self._current_result: Optional[str] = None
+        self._dwell_until_ns: Optional[int] = None
         self._path: Optional[List[Tuple[float, float]]] = None
         self._path_idx: int = 0
         self._path_goal_idx: Optional[int] = None
@@ -545,7 +548,6 @@ class PatrolManager(Node):
         self._last_vision = msg.data.strip()
         if self._waiting_vision and self._last_vision in ("normal", "abnormal"):
             self._current_result = self._last_vision
-            self._waiting_vision = False
 
     def _publish_cmd(self, v: float, w: float) -> None:
         t = Twist()
@@ -563,14 +565,29 @@ class PatrolManager(Node):
 
         if self._waiting_vision:
             self._publish_cmd(0.0, 0.0)
+            now_ns = self.get_clock().now().nanoseconds
+            if self._dwell_until_ns is not None and now_ns < self._dwell_until_ns:
+                return
+
             if self._current_result is not None:
                 point = self._points[self._idx]
                 self.get_logger().info(f"[{point.name}] status={self._current_result}")
-                self._current_result = None
-                self._idx += 1
-                self._path = None
-                self._path_goal_idx = None
-                self._path_idx = 0
+            else:
+                point = self._points[self._idx]
+                status = (
+                    self._last_vision
+                    if self._last_vision in ("normal", "abnormal")
+                    else "unknown"
+                )
+                self.get_logger().info(f"[{point.name}] status={status}")
+
+            self._current_result = None
+            self._waiting_vision = False
+            self._dwell_until_ns = None
+            self._idx += 1
+            self._path = None
+            self._path_goal_idx = None
+            self._path_idx = 0
             return
 
         x, y, yaw = self._pose
@@ -580,8 +597,13 @@ class PatrolManager(Node):
         dist = math.hypot(dx, dy)
 
         if dist <= self._goal_tol:
-            self.get_logger().info(f"Reached {goal.name}, waiting vision result...")
+            self.get_logger().info(
+                f"Reached {goal.name}, dwelling {self._dwell_time:.1f}s..."
+            )
             self._waiting_vision = True
+            self._dwell_until_ns = (
+                self.get_clock().now().nanoseconds + int(self._dwell_time * 1e9)
+            )
             self._current_result = None
             self._publish_cmd(0.0, 0.0)
             self._path = None
