@@ -23,9 +23,6 @@ def generate_launch_description() -> LaunchDescription:
     avoid_dir_hysteresis_arg = DeclareLaunchArgument("avoid_dir_hysteresis", default_value="0.08")
     scan_front_angle_arg = DeclareLaunchArgument("scan_front_angle", default_value="0.60")
     scan_side_angle_arg = DeclareLaunchArgument("scan_side_angle", default_value="1.20")
-    goal_min_weight_arg = DeclareLaunchArgument("goal_min_weight", default_value="0.25")
-    goal_blend_distance_arg = DeclareLaunchArgument("goal_blend_distance", default_value="2.0")
-    scan_steer_gain_arg = DeclareLaunchArgument("scan_steer_gain", default_value="1.6")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
     vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
@@ -149,15 +146,6 @@ def generate_launch_description() -> LaunchDescription:
                         "scan_side_angle": ParameterValue(
                             LaunchConfiguration("scan_side_angle"), value_type=float
                         ),
-                        "goal_min_weight": ParameterValue(
-                            LaunchConfiguration("goal_min_weight"), value_type=float
-                        ),
-                        "goal_blend_distance": ParameterValue(
-                            LaunchConfiguration("goal_blend_distance"), value_type=float
-                        ),
-                        "scan_steer_gain": ParameterValue(
-                            LaunchConfiguration("scan_steer_gain"), value_type=float
-                        ),
                         "dwell_time": ParameterValue(
                             LaunchConfiguration("dwell_time"), value_type=float
                         ),
@@ -210,9 +198,6 @@ def generate_launch_description() -> LaunchDescription:
             avoid_dir_hysteresis_arg,
             scan_front_angle_arg,
             scan_side_angle_arg,
-            goal_min_weight_arg,
-            goal_blend_distance_arg,
-            scan_steer_gain_arg,
             dwell_time_arg,
             loop_patrol_arg,
             vision_roi_size_arg,
