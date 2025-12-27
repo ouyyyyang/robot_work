@@ -889,7 +889,21 @@ class PatrolManager(Node):
             alpha_dist = self._goal_min_w + (1.0 - self._goal_min_w) * t_dist
             t_turn = max(0.0, min(1.0, abs(err) / self._goal_turn_angle))
             alpha_turn = self._goal_min_w + (1.0 - self._goal_min_w) * t_turn
-            alpha = max(alpha_dist, alpha_turn)
+            goal_range: Optional[float] = None
+            goal_blocked = False
+            if scan is not None:
+                goal_range = self._scan_sector_min(scan, err - 0.25, err + 0.25)
+                if goal_range is not None and self._obs_slow > 0.0 and goal_range < self._obs_slow:
+                    goal_blocked = True
+
+            # If the goal direction is blocked by an obstacle, avoid over-weighting "turn to goal"
+            # (it causes the robot to stall and oscillate between goal-turn and obstacle avoidance).
+            alpha = alpha_dist if goal_blocked else max(alpha_dist, alpha_turn)
+
+            if goal_range is not None and self._obs_slow > 0.0:
+                goal_clearance = max(0.0, min(1.0, goal_range / self._obs_slow))
+                alpha *= goal_clearance
+
             if front_min is not None and self._obs_slow > 0.0:
                 clearance = max(0.0, min(1.0, front_min / self._obs_slow))
                 alpha *= clearance
