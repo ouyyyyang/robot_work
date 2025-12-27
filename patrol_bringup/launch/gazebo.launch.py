@@ -3,6 +3,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetE
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 
@@ -71,7 +72,9 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         parameters=[
             {
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "use_sim_time": ParameterValue(
+                    LaunchConfiguration("use_sim_time"), value_type=bool
+                ),
                 "robot_description": robot_description,
             }
         ],
@@ -81,14 +84,26 @@ def generate_launch_description() -> LaunchDescription:
         package="patrol_control",
         executable="wheel_joint_state_publisher",
         output="screen",
-        parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+        parameters=[
+            {
+                "use_sim_time": ParameterValue(
+                    LaunchConfiguration("use_sim_time"), value_type=bool
+                )
+            }
+        ],
     )
 
     environment_markers = Node(
         package="patrol_control",
         executable="environment_markers",
         output="screen",
-        parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+        parameters=[
+            {
+                "use_sim_time": ParameterValue(
+                    LaunchConfiguration("use_sim_time"), value_type=bool
+                )
+            }
+        ],
     )
 
     return LaunchDescription(

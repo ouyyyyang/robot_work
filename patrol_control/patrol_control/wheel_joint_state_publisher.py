@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Optional, Tuple
+from typing import Optional
 
 import rclpy
 from nav_msgs.msg import Odometry
@@ -13,13 +13,13 @@ class WheelJointStatePublisher(Node):
     def __init__(self) -> None:
         super().__init__("wheel_joint_state_publisher")
 
+        self.declare_parameter("use_sim_time", False)
         self.declare_parameter("odom_topic", "/patrol_robot/odom")
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter("wheel_separation", 0.32)
         self.declare_parameter("wheel_radius", 0.05)
         self.declare_parameter("left_joint", "left_wheel_joint")
         self.declare_parameter("right_joint", "right_wheel_joint")
-        self.declare_parameter("publish_rate", 30.0)
 
         self._odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
         self._joint_topic = (
@@ -29,48 +29,50 @@ class WheelJointStatePublisher(Node):
         self._wheel_r = float(self.get_parameter("wheel_radius").value)
         self._left_joint = self.get_parameter("left_joint").get_parameter_value().string_value
         self._right_joint = self.get_parameter("right_joint").get_parameter_value().string_value
-        rate = float(self.get_parameter("publish_rate").value)
 
-        self._last_time_ns: Optional[int] = None
-        self._last_twist: Tuple[float, float] = (0.0, 0.0)  # (v, w)
+        self._last_stamp_ns: Optional[int] = None
         self._left_pos = 0.0
         self._right_pos = 0.0
 
         self._pub = self.create_publisher(JointState, self._joint_topic, 20)
         self.create_subscription(Odometry, self._odom_topic, self._on_odom, 50)
-        self.create_timer(1.0 / max(1.0, rate), self._tick)
 
         self.get_logger().info(f"Subscribing: {self._odom_topic}")
         self.get_logger().info(f"Publishing:  {self._joint_topic}")
 
-    def _on_odom(self, msg: Odometry) -> None:
-        v = float(msg.twist.twist.linear.x)
-        w = float(msg.twist.twist.angular.z)
-        self._last_twist = (v, w)
+    @staticmethod
+    def _stamp_to_ns(msg: Odometry) -> int:
+        return int(msg.header.stamp.sec) * 1_000_000_000 + int(msg.header.stamp.nanosec)
 
-    def _tick(self) -> None:
+    def _on_odom(self, msg: Odometry) -> None:
         if self._wheel_r <= 0.0:
             return
 
-        now_ns = self.get_clock().now().nanoseconds
-        if self._last_time_ns is None:
-            self._last_time_ns = now_ns
+        stamp_ns = self._stamp_to_ns(msg)
+        if self._last_stamp_ns is None:
+            self._last_stamp_ns = stamp_ns
+            self._publish_joint_state(msg)
             return
 
-        dt = (now_ns - self._last_time_ns) * 1e-9
-        self._last_time_ns = now_ns
+        dt = (stamp_ns - self._last_stamp_ns) * 1e-9
+        self._last_stamp_ns = stamp_ns
         if dt <= 0.0 or dt > 0.5:
+            self._publish_joint_state(msg)
             return
 
-        v, w = self._last_twist
+        v = float(msg.twist.twist.linear.x)
+        w = float(msg.twist.twist.angular.z)
         omega_l = (v - w * (self._wheel_sep / 2.0)) / self._wheel_r
         omega_r = (v + w * (self._wheel_sep / 2.0)) / self._wheel_r
 
         self._left_pos = (self._left_pos + omega_l * dt) % (2.0 * math.pi)
         self._right_pos = (self._right_pos + omega_r * dt) % (2.0 * math.pi)
 
+        self._publish_joint_state(msg)
+
+    def _publish_joint_state(self, odom: Odometry) -> None:
         msg = JointState()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.stamp = odom.header.stamp
         msg.name = [self._left_joint, self._right_joint]
         msg.position = [float(self._left_pos), float(self._right_pos)]
         self._pub.publish(msg)
@@ -90,4 +92,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

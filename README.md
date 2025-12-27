@@ -188,8 +188,10 @@ source ~/patrol_ws/install/setup.bash
 ros2 node list | grep -E "robot_state_publisher|environment_markers|wheel_joint_state_publisher"
 ros2 topic list | grep -E "^/tf$|^/tf_static$|^/joint_states$|^/patrol/markers$|^/clock$"
 ros2 param get /robot_state_publisher robot_description | head
+ros2 topic echo /joint_states --once
 ros2 topic echo /patrol/markers --once
 ros2 run tf2_ros tf2_echo odom base_link
+ros2 run tf2_ros tf2_echo base_link left_wheel_link
 ```
 
 只要上面能看到：
