@@ -20,6 +20,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", glob(pkg_path("launch", "*.launch.py"))),
         ("share/" + package_name + "/config", glob(pkg_path("config", "*.yaml"))),
+        ("share/" + package_name + "/urdf", glob(pkg_path("urdf", "*.urdf"))),
         (
             "share/" + package_name + "/worlds",
             [pkg_path("..", "worlds", "patrol_world.sdf")],
@@ -50,4 +51,3 @@ setup(
         "console_scripts": [],
     },
 )
-

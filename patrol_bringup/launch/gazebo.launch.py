@@ -1,11 +1,10 @@
-import os
-
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -62,21 +61,34 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
-    # Publish static TFs for RViz2 visualization (SDF links are not automatically in TF tree).
-    # base_link -> camera_link: (0.20, 0, 0.08) because base_link.z=0.10 and camera_link.z=0.18 in model frame.
-    static_tf_camera = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        arguments=["0.20", "0.0", "0.08", "0.0", "0.0", "0.0", "base_link", "camera_link"],
+    urdf_path = get_package_share_directory("patrol_bringup") + "/urdf/patrol_robot.urdf"
+    with open(urdf_path, "r", encoding="utf-8") as f:
+        robot_description = f.read()
+
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
         output="screen",
+        parameters=[
+            {
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "robot_description": robot_description,
+            }
+        ],
     )
 
-    # base_link -> ultrasonic_link: (0.23, 0, 0.00) because both are at z=0.10 in model frame.
-    static_tf_ultrasonic = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        arguments=["0.23", "0.0", "0.0", "0.0", "0.0", "0.0", "base_link", "ultrasonic_link"],
+    wheel_joint_state_publisher = Node(
+        package="patrol_control",
+        executable="wheel_joint_state_publisher",
         output="screen",
+        parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+    )
+
+    environment_markers = Node(
+        package="patrol_control",
+        executable="environment_markers",
+        output="screen",
+        parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
     )
 
     return LaunchDescription(
@@ -90,7 +102,8 @@ def generate_launch_description() -> LaunchDescription:
             set_model_path,
             gazebo,
             spawn_robot,
-            static_tf_camera,
-            static_tf_ultrasonic,
+            robot_state_publisher,
+            wheel_joint_state_publisher,
+            environment_markers,
         ]
     )

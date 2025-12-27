@@ -170,8 +170,10 @@ RViz2 里建议这样配置：
 - Add → `Odometry`，Topic 选 `/patrol_robot/odom`
 - Add → `LaserScan`，Topic 选 `/patrol_robot/ultrasonic/scan`
 - Add → `Image`，Topic 选 `/patrol_robot/front_camera/image_raw`
+- Add → `RobotModel`（显示机器人 3D 模型，使用 `robot_description`）
+- Add → `MarkerArray`，Topic 选 `/patrol/markers`（显示墙体/巡检点/障碍物）
 
-说明：`gazebo.launch.py` 已启动 `static_transform_publisher` 发布 `base_link -> camera_link/ultrasonic_link`，所以 `LaserScan` 可以直接在 RViz2 显示。
+说明：`gazebo.launch.py` 会启动 `robot_state_publisher`（发布机器人各 link 的 TF）和 `/joint_states`（轮子随运动转动），所以 RViz2 可以看到完整机器人模型与传感器 TF。
 
 ## 巡逻路径规划（基于墙体）
 

@@ -72,7 +72,7 @@
 - 格式：`R8G8B8`
 - 水平视场角（horizontal_fov）：1.047 rad（约 60°）
 - 近/远裁剪：0.1 m / 10.0 m
-- 更新频率：30 Hz
+- 更新频率：10 Hz
 
 Gazebo-ROS 插件：
 
@@ -118,6 +118,7 @@ Gazebo-ROS 插件：
 关键参数：
 
 - 左/右轮关节：`left_wheel_joint` / `right_wheel_joint`
+- `update_rate`：20 Hz（控制里程计/TF 发布频率）
 - `wheel_separation`：0.32 m
 - `wheel_diameter`：0.10 m
 - `max_wheel_torque`：20.0
@@ -199,6 +200,10 @@ ROS2 接口（命名空间 `/patrol_robot`）：
   - 启动 Gazebo（通过 `gazebo_ros` 的标准 launch）
   - 设置 `GAZEBO_MODEL_PATH` 指向安装后的 `patrol_bringup/models`
   - 通过 `gazebo_ros/spawn_entity.py` 生成机器人
+  - 启动 RViz 可视化相关节点：
+    - `robot_state_publisher`：发布机器人各 link 的 TF（读取 `urdf/patrol_robot.urdf`）
+    - `wheel_joint_state_publisher`：从 `/patrol_robot/odom` 估算轮子转角并发布 `/joint_states`（让 RViz 里车轮随动）
+    - `environment_markers`：发布 `/patrol/markers`（墙体/巡检点/障碍物）
   - 机器人初始位置参数：
     - `robot_x=1.482`、`robot_y=5.779`、`robot_z=0.0`、`robot_yaw=-0.965`
 
@@ -206,6 +211,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
   - 包含 `gazebo.launch.py`
   - 启动控制节点：
     - `patrol_control/vision_checker`
+    - `patrol_control/scan_to_range`
     - `patrol_control/obstacle_controller`
     - `patrol_control/patrol_manager`
   - Nav2：提供可选入口（`use_nav2:=true`），但参数文件目前为占位，需要你自行补全
@@ -309,6 +315,36 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 - 取 `LaserScan.ranges` 中所有有限值的最小值；全部无效则取 `range_max`。
 - `radiation_type = ULTRASOUND`，`field_of_view` 优先用 `|angle_max-angle_min|`，否则用 `default_fov=0.2`。
+
+### 7.3.2 节点：`wheel_joint_state_publisher`（odom → joint_states，用于 RViz 轮子随动）
+
+文件：`patrol_control/patrol_control/wheel_joint_state_publisher.py`
+
+- 订阅：
+  - `/patrol_robot/odom`（`nav_msgs/Odometry`）
+- 发布：
+  - `/joint_states`（`sensor_msgs/JointState`，包含 `left_wheel_joint/right_wheel_joint`）
+
+做法：
+
+- 从 `odom.twist.twist.linear.x`、`odom.twist.twist.angular.z` 得到车体线速度 `v` 与角速度 `w`
+- 按差速模型估算轮速并积分得到轮子转角（用于 RViz 动画）：
+  - `omega_l = (v - w * wheel_separation/2) / wheel_radius`
+  - `omega_r = (v + w * wheel_separation/2) / wheel_radius`
+
+### 7.3.3 节点：`environment_markers`（RViz 场景标注：墙/巡检点/障碍物）
+
+文件：`patrol_control/patrol_control/environment_markers.py`
+
+- 发布：
+  - `/patrol/markers`（`visualization_msgs/MarkerArray`）
+- 数据来源：
+  - 墙体 / 巡检点：解析 `models/patrol_environment/model.sdf`
+  - 障碍物：解析 `worlds/patrol_world.sdf` 获取尺寸，订阅 `/gazebo/model_states` 实时更新 pose
+
+备注：
+
+- `frame_id` 默认为 `odom`，RViz 里 `Fixed Frame` 设为 `odom` 即可叠加显示。
 
 ### 7.4 节点：`obstacle_controller`（动态障碍两点往返）
 

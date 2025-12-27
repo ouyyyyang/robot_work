@@ -236,7 +236,7 @@
       <sensor name="front_camera_sensor" type="camera">
         <pose>0 0 0 0 0 0</pose>
         <always_on>true</always_on>
-        <update_rate>30</update_rate>
+        <update_rate>10</update_rate>
         <visualize>true</visualize>
         <camera>
           <horizontal_fov>1.047</horizontal_fov>
@@ -341,6 +341,7 @@
       <ros>
         <namespace>/patrol_robot</namespace>
       </ros>
+      <update_rate>20</update_rate>
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
       <wheel_separation>0.32</wheel_separation>
