@@ -812,11 +812,14 @@ class PatrolManager(Node):
         desired_angle = _normalize_angle(desired_angle)
         prev_angle = _normalize_angle(prev_angle)
 
+        # Build a binary free-space mask and pick the *center* of a free "valley" (gap),
+        # instead of greedily steering to one edge of the open space. This helps the robot
+        # enter narrow gaps head-on.
+        n = len(scan.ranges)
+        rr_vals: List[Optional[float]] = [None] * n
+        free: List[bool] = [False] * n
+
         for i, r in enumerate(scan.ranges):
-            v = self._scan_range_value(r=float(r), min_valid=min_valid, range_max=range_max)
-            if v is None:
-                continue
-            rr = float(v)
             ang = amin + i * inc
             if abs(ang) > max_abs:
                 continue
@@ -825,18 +828,71 @@ class PatrolManager(Node):
                     continue
                 if side < 0.0 and ang > 0.0:
                     continue
-            if rr < self._obs_stop:
+            v = self._scan_range_value(r=float(r), min_valid=min_valid, range_max=range_max)
+            if v is None:
                 continue
+            rr_vals[i] = float(v)
+            free[i] = rr_vals[i] >= self._obs_stop
+
+        best_center_idx: Optional[int] = None
+        best_start = 0
+        best_end = -1
+
+        i = 0
+        while i < n:
+            if not free[i]:
+                i += 1
+                continue
+            start = i
+            while i + 1 < n and free[i + 1]:
+                i += 1
+            end = i
+
+            center_idx = (start + end) // 2
+            rr = rr_vals[center_idx]
+            if rr is None:
+                i += 1
+                continue
+            ang = amin + center_idx * inc
+
             forward = max(0.0, math.cos(ang))
-            score = rr * (bias + (1.0 - bias) * forward)
+            score = float(rr) * (bias + (1.0 - bias) * forward)
             if goal_w > 0.0:
                 score += goal_w * math.cos(_normalize_angle(ang - desired_angle))
             if prev_w > 0.0:
                 score += prev_w * math.cos(_normalize_angle(ang - prev_angle))
+
+            # Prefer wider valleys a little bit, to avoid squeezing along an edge.
+            width = end - start + 1
+            score += 0.05 * float(width)
+
             if score > best_score:
                 best_score = score
                 best_angle = ang
-                best_range = rr
+                best_range = float(rr)
+                best_center_idx = center_idx
+                best_start = start
+                best_end = end
+
+            i += 1
+
+        # If we found a valley, keep the steering centered but biased towards the goal
+        # direction inside that valley (still staying away from the edges).
+        if best_center_idx is not None:
+            desired_idx = int(round((desired_angle - amin) / inc))
+            desired_idx = max(best_start, min(best_end, desired_idx))
+            # Keep a small edge margin (1 beam) so we don't graze obstacles.
+            desired_idx = max(best_start + 1, min(best_end - 1, desired_idx)) if best_end - best_start >= 2 else desired_idx
+            if desired_idx != best_center_idx:
+                ang2 = amin + desired_idx * inc
+                rr2 = rr_vals[desired_idx]
+                if rr2 is not None:
+                    # In narrow valleys (gaps), keep the heading close to the valley center.
+                    # In wide open space, allow more bias towards the goal direction.
+                    width = best_end - best_start + 1
+                    goal_bias = 0.3 * max(0.0, min(1.0, (float(width) - 3.0) / 6.0))
+                    best_angle = (1.0 - goal_bias) * best_angle + goal_bias * ang2
+                    best_range = float(rr2)
 
         return float(best_angle), float(best_score), float(best_range)
 
