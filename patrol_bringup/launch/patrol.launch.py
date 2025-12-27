@@ -17,8 +17,15 @@ def generate_launch_description() -> LaunchDescription:
     max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
     obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
     obstacle_slow_distance_arg = DeclareLaunchArgument("obstacle_slow_distance", default_value="0.90")
+    obstacle_clear_distance_arg = DeclareLaunchArgument("obstacle_clear_distance", default_value="0.65")
+    avoid_min_turn_time_arg = DeclareLaunchArgument("avoid_min_turn_time", default_value="0.35")
+    avoid_clear_hold_time_arg = DeclareLaunchArgument("avoid_clear_hold_time", default_value="0.15")
+    avoid_dir_hysteresis_arg = DeclareLaunchArgument("avoid_dir_hysteresis", default_value="0.08")
     scan_front_angle_arg = DeclareLaunchArgument("scan_front_angle", default_value="0.60")
     scan_side_angle_arg = DeclareLaunchArgument("scan_side_angle", default_value="1.20")
+    goal_min_weight_arg = DeclareLaunchArgument("goal_min_weight", default_value="0.25")
+    goal_blend_distance_arg = DeclareLaunchArgument("goal_blend_distance", default_value="2.0")
+    scan_steer_gain_arg = DeclareLaunchArgument("scan_steer_gain", default_value="1.6")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
     vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
@@ -124,11 +131,32 @@ def generate_launch_description() -> LaunchDescription:
                         "obstacle_slow_distance": ParameterValue(
                             LaunchConfiguration("obstacle_slow_distance"), value_type=float
                         ),
+                        "obstacle_clear_distance": ParameterValue(
+                            LaunchConfiguration("obstacle_clear_distance"), value_type=float
+                        ),
+                        "avoid_min_turn_time": ParameterValue(
+                            LaunchConfiguration("avoid_min_turn_time"), value_type=float
+                        ),
+                        "avoid_clear_hold_time": ParameterValue(
+                            LaunchConfiguration("avoid_clear_hold_time"), value_type=float
+                        ),
+                        "avoid_dir_hysteresis": ParameterValue(
+                            LaunchConfiguration("avoid_dir_hysteresis"), value_type=float
+                        ),
                         "scan_front_angle": ParameterValue(
                             LaunchConfiguration("scan_front_angle"), value_type=float
                         ),
                         "scan_side_angle": ParameterValue(
                             LaunchConfiguration("scan_side_angle"), value_type=float
+                        ),
+                        "goal_min_weight": ParameterValue(
+                            LaunchConfiguration("goal_min_weight"), value_type=float
+                        ),
+                        "goal_blend_distance": ParameterValue(
+                            LaunchConfiguration("goal_blend_distance"), value_type=float
+                        ),
+                        "scan_steer_gain": ParameterValue(
+                            LaunchConfiguration("scan_steer_gain"), value_type=float
                         ),
                         "dwell_time": ParameterValue(
                             LaunchConfiguration("dwell_time"), value_type=float
@@ -176,8 +204,15 @@ def generate_launch_description() -> LaunchDescription:
             max_linear_arg,
             obstacle_stop_distance_arg,
             obstacle_slow_distance_arg,
+            obstacle_clear_distance_arg,
+            avoid_min_turn_time_arg,
+            avoid_clear_hold_time_arg,
+            avoid_dir_hysteresis_arg,
             scan_front_angle_arg,
             scan_side_angle_arg,
+            goal_min_weight_arg,
+            goal_blend_distance_arg,
+            scan_steer_gain_arg,
             dwell_time_arg,
             loop_patrol_arg,
             vision_roi_size_arg,

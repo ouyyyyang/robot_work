@@ -135,6 +135,25 @@ ros2 launch patrol_bringup patrol.launch.py \
   obstacle_stop_distance:=0.7
 ```
 
+默认是“雷达主导 + 检查点引导”的速度合成：离检查点远时更多跟随超声扫描（走通道/避障），靠近检查点时逐渐增加朝向检查点的权重。
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py \
+  goal_min_weight:=0.2 \
+  goal_blend_distance:=2.5 \
+  scan_steer_gain:=1.8
+```
+
+如果避障时出现“抽搐/来回切换”，可以增大退出避障的阈值和保持时间（示例）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py \
+  obstacle_clear_distance:=0.8 \
+  avoid_min_turn_time:=0.5 \
+  avoid_clear_hold_time:=0.25 \
+  avoid_dir_hysteresis:=0.12
+```
+
 巡检点停留时间（默认 2 秒）：
 
 ```bash
