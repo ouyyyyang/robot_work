@@ -452,6 +452,13 @@ class PatrolManager(Node):
         self.declare_parameter("max_angular", 1.2)
         self.declare_parameter("k_linear", 0.6)
         self.declare_parameter("k_angular", 1.8)
+        self.declare_parameter("goal_min_weight", 0.25)
+        self.declare_parameter("goal_blend_distance", 2.0)
+        self.declare_parameter("goal_turn_angle", 1.0)
+        self.declare_parameter("scan_steer_gain", 1.6)
+        self.declare_parameter("scan_forward_bias", 0.25)
+        self.declare_parameter("scan_angle_smoothing", 0.25)
+        self.declare_parameter("scan_angle_deadband", 0.05)
         self.declare_parameter("dwell_time", 2.0)
         self.declare_parameter("loop_patrol", True)
 
@@ -471,7 +478,7 @@ class PatrolManager(Node):
         self.declare_parameter("avoid_clear_hold_time", 0.15)
         self.declare_parameter("avoid_dir_hysteresis", 0.08)
         self.declare_parameter("scan_front_angle", 0.60)
-        self.declare_parameter("scan_side_angle", 1.20)
+        self.declare_parameter("scan_side_angle", 1.57)
         self.declare_parameter("scan_min_valid_range", 0.05)
 
         cmd_vel_topic = self.get_parameter("cmd_vel_topic").get_parameter_value().string_value
@@ -499,6 +506,15 @@ class PatrolManager(Node):
         self._max_ang = float(self.get_parameter("max_angular").value)
         self._k_lin = float(self.get_parameter("k_linear").value)
         self._k_ang = float(self.get_parameter("k_angular").value)
+        self._goal_min_w = float(self.get_parameter("goal_min_weight").value)
+        self._goal_min_w = max(0.0, min(1.0, self._goal_min_w))
+        self._goal_blend_dist = max(1e-3, float(self.get_parameter("goal_blend_distance").value))
+        self._goal_turn_angle = max(1e-3, float(self.get_parameter("goal_turn_angle").value))
+        self._scan_k = float(self.get_parameter("scan_steer_gain").value)
+        self._scan_bias = float(self.get_parameter("scan_forward_bias").value)
+        self._scan_bias = max(0.0, min(1.0, self._scan_bias))
+        self._scan_tau = max(0.0, float(self.get_parameter("scan_angle_smoothing").value))
+        self._scan_deadband = max(0.0, float(self.get_parameter("scan_angle_deadband").value))
         self._dwell_time = max(0.0, float(self.get_parameter("dwell_time").value))
         self._loop_patrol = bool(self.get_parameter("loop_patrol").value)
         self._lap_count = 0
@@ -559,6 +575,8 @@ class PatrolManager(Node):
         self._avoid_dir = 1.0
         self._avoid_start_ns: Optional[int] = None
         self._avoid_clear_since_ns: Optional[int] = None
+        self._scan_angle_filt = 0.0
+        self._last_tick_ns: Optional[int] = None
         self._path: Optional[List[Tuple[float, float]]] = None
         self._path_idx: int = 0
         self._path_goal_idx: Optional[int] = None
@@ -636,6 +654,36 @@ class PatrolManager(Node):
         if scan.range_max > 0.0:
             return float(scan.range_max)
         return None
+
+    def _scan_best_angle(self, scan: LaserScan, *, max_abs_angle: float) -> float:
+        if not scan.ranges:
+            return 0.0
+        if scan.angle_increment == 0.0:
+            return 0.0
+
+        amin = float(scan.angle_min)
+        inc = float(scan.angle_increment)
+        min_valid = max(float(scan.range_min), self._scan_min_valid)
+
+        max_abs = max(0.0, float(max_abs_angle))
+        best_score = float("-inf")
+        best_angle = 0.0
+        bias = self._scan_bias
+
+        for i, r in enumerate(scan.ranges):
+            rr = float(r)
+            if not self._is_valid_scan_range(rr, min_valid=min_valid):
+                continue
+            ang = amin + i * inc
+            if abs(ang) > max_abs:
+                continue
+            forward = max(0.0, math.cos(ang))
+            score = rr * (bias + (1.0 - bias) * forward)
+            if score > best_score:
+                best_score = score
+                best_angle = ang
+
+        return float(best_angle)
 
     def _tick(self) -> None:
         if self._idx >= len(self._points):
@@ -737,13 +785,13 @@ class PatrolManager(Node):
         target = math.atan2(target_y - y, target_x - x)
         err = _normalize_angle(target - yaw)
 
-        w_cmd = max(-self._max_ang, min(self._max_ang, self._k_ang * err))
-        v_cmd = min(self._max_lin, self._k_lin * dist)
+        w_goal = max(-self._max_ang, min(self._max_ang, self._k_ang * err))
+        v_goal = min(self._max_lin, self._k_lin * dist)
 
         if abs(err) > 0.8:
-            v_cmd *= 0.2
+            v_goal *= 0.2
         elif abs(err) > 0.4:
-            v_cmd *= 0.6
+            v_goal *= 0.6
 
         scan = self._scan
         front_min: Optional[float] = None
@@ -759,6 +807,10 @@ class PatrolManager(Node):
             front_min = self._range
 
         now_ns = self.get_clock().now().nanoseconds
+        dt = 0.1
+        if self._last_tick_ns is not None:
+            dt = max(0.0, min(0.5, (now_ns - self._last_tick_ns) * 1e-9))
+        self._last_tick_ns = now_ns
 
         # Obstacle avoidance: keep a short "turn mode" with hysteresis to avoid twitching
         # when measurements fluctuate around the threshold.
@@ -801,25 +853,60 @@ class PatrolManager(Node):
             self._avoid_active = True
             self._avoid_start_ns = now_ns
             self._avoid_clear_since_ns = None
+            self._scan_angle_filt = 0.0
             self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
             self._path = None
             self._path_goal_idx = None
             self._path_idx = 0
             return
 
+        scan_available = bool(scan is not None and scan.ranges and scan.angle_increment != 0.0)
+        scan_angle_raw = 0.0
+        if scan_available:
+            scan_angle_raw = self._scan_best_angle(scan, max_abs_angle=self._scan_side_angle)
+
+        scan_angle = scan_angle_raw
+        if scan_available and self._scan_tau > 0.0:
+            beta = dt / (self._scan_tau + dt)
+            self._scan_angle_filt = self._scan_angle_filt + beta * (scan_angle_raw - self._scan_angle_filt)
+            scan_angle = self._scan_angle_filt
+        else:
+            self._scan_angle_filt = scan_angle_raw if scan_available else 0.0
+            scan_angle = self._scan_angle_filt
+
+        if abs(scan_angle) < self._scan_deadband:
+            scan_angle = 0.0
+
+        w_scan = max(-self._max_ang, min(self._max_ang, self._scan_k * scan_angle))
+        v_scan = (
+            self._max_lin * max(0.0, math.cos(scan_angle)) if scan_available else 0.0
+        )
+
+        if not scan_available:
+            alpha = 1.0
+        else:
+            t_dist = max(0.0, min(1.0, 1.0 - dist / self._goal_blend_dist))
+            alpha_dist = self._goal_min_w + (1.0 - self._goal_min_w) * t_dist
+            t_turn = max(0.0, min(1.0, abs(err) / self._goal_turn_angle))
+            alpha_turn = self._goal_min_w + (1.0 - self._goal_min_w) * t_turn
+            alpha = max(alpha_dist, alpha_turn)
+            if front_min is not None and self._obs_slow > 0.0:
+                clearance = max(0.0, min(1.0, front_min / self._obs_slow))
+                alpha *= clearance
+
+        v_cmd = alpha * v_goal + (1.0 - alpha) * v_scan
+        w_cmd = alpha * w_goal + (1.0 - alpha) * w_scan
+
+        if abs(w_cmd) > 0.8:
+            v_cmd *= 0.2
+        elif abs(w_cmd) > 0.4:
+            v_cmd *= 0.6
+
+        v_cmd = max(0.0, min(self._max_lin, v_cmd))
+        w_cmd = max(-self._max_ang, min(self._max_ang, w_cmd))
+
         if front_min is not None and front_min < self._obs_slow:
-            # Slow down and steer toward the side with more clearance.
-            turn_dir = 0.0
-            if left_min is not None and right_min is not None:
-                if abs(left_min - right_min) > self._avoid_dir_eps:
-                    turn_dir = 1.0 if left_min >= right_min else -1.0
-            strength = (self._obs_slow - front_min) / max(1e-6, self._obs_slow - self._obs_stop)
-            strength = max(0.0, min(1.0, strength))
             v_cmd *= max(0.0, min(1.0, front_min / self._obs_slow))
-            w_cmd = max(
-                -self._max_ang,
-                min(self._max_ang, w_cmd + turn_dir * strength * self._avoid_w),
-            )
 
         self._publish_cmd(v_cmd, w_cmd)
 

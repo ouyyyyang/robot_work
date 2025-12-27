@@ -22,7 +22,14 @@ def generate_launch_description() -> LaunchDescription:
     avoid_clear_hold_time_arg = DeclareLaunchArgument("avoid_clear_hold_time", default_value="0.15")
     avoid_dir_hysteresis_arg = DeclareLaunchArgument("avoid_dir_hysteresis", default_value="0.08")
     scan_front_angle_arg = DeclareLaunchArgument("scan_front_angle", default_value="0.60")
-    scan_side_angle_arg = DeclareLaunchArgument("scan_side_angle", default_value="1.20")
+    scan_side_angle_arg = DeclareLaunchArgument("scan_side_angle", default_value="1.57")
+    goal_min_weight_arg = DeclareLaunchArgument("goal_min_weight", default_value="0.25")
+    goal_blend_distance_arg = DeclareLaunchArgument("goal_blend_distance", default_value="2.0")
+    goal_turn_angle_arg = DeclareLaunchArgument("goal_turn_angle", default_value="1.0")
+    scan_steer_gain_arg = DeclareLaunchArgument("scan_steer_gain", default_value="1.6")
+    scan_forward_bias_arg = DeclareLaunchArgument("scan_forward_bias", default_value="0.25")
+    scan_angle_smoothing_arg = DeclareLaunchArgument("scan_angle_smoothing", default_value="0.25")
+    scan_angle_deadband_arg = DeclareLaunchArgument("scan_angle_deadband", default_value="0.05")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
     vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
@@ -146,6 +153,27 @@ def generate_launch_description() -> LaunchDescription:
                         "scan_side_angle": ParameterValue(
                             LaunchConfiguration("scan_side_angle"), value_type=float
                         ),
+                        "goal_min_weight": ParameterValue(
+                            LaunchConfiguration("goal_min_weight"), value_type=float
+                        ),
+                        "goal_blend_distance": ParameterValue(
+                            LaunchConfiguration("goal_blend_distance"), value_type=float
+                        ),
+                        "goal_turn_angle": ParameterValue(
+                            LaunchConfiguration("goal_turn_angle"), value_type=float
+                        ),
+                        "scan_steer_gain": ParameterValue(
+                            LaunchConfiguration("scan_steer_gain"), value_type=float
+                        ),
+                        "scan_forward_bias": ParameterValue(
+                            LaunchConfiguration("scan_forward_bias"), value_type=float
+                        ),
+                        "scan_angle_smoothing": ParameterValue(
+                            LaunchConfiguration("scan_angle_smoothing"), value_type=float
+                        ),
+                        "scan_angle_deadband": ParameterValue(
+                            LaunchConfiguration("scan_angle_deadband"), value_type=float
+                        ),
                         "dwell_time": ParameterValue(
                             LaunchConfiguration("dwell_time"), value_type=float
                         ),
@@ -198,6 +226,13 @@ def generate_launch_description() -> LaunchDescription:
             avoid_dir_hysteresis_arg,
             scan_front_angle_arg,
             scan_side_angle_arg,
+            goal_min_weight_arg,
+            goal_blend_distance_arg,
+            goal_turn_angle_arg,
+            scan_steer_gain_arg,
+            scan_forward_bias_arg,
+            scan_angle_smoothing_arg,
+            scan_angle_deadband_arg,
             dwell_time_arg,
             loop_patrol_arg,
             vision_roi_size_arg,

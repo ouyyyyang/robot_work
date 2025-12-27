@@ -145,6 +145,18 @@ ros2 launch patrol_bringup patrol.launch.py \
   avoid_dir_hysteresis:=0.12
 ```
 
+如果在墙角转弯容易“顶住角”或靠近障碍物左右摆头，可以调大侧向扫描范围并增加扫描引导的平滑（示例）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py \
+  scan_side_angle:=1.57 \
+  goal_min_weight:=0.2 \
+  goal_turn_angle:=1.2 \
+  scan_forward_bias:=0.35 \
+  scan_angle_smoothing:=0.35 \
+  scan_angle_deadband:=0.08
+```
+
 巡检点停留时间（默认 2 秒）：
 
 ```bash
