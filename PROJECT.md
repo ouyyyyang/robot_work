@@ -295,14 +295,14 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 - 路径规划：
   - `use_path_planner=true`
   - `grid_resolution=0.10`
-  - `wall_inflation=0.20`
+  - `wall_inflation=0.17`
   - `grid_margin=1.0`
   - `plan_interval=1.0`
   - `lookahead_distance=0.7`
   - `waypoint_tolerance=0.35`
   - 动态障碍纳入规划：
     - `use_dynamic_obstacles=true`
-    - `obstacle_inflation=0.20`
+    - `obstacle_inflation=0.17`
 - `obstacle_stop_distance=0.45`
 - `avoid_turn_angular=1.0`
 

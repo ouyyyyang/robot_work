@@ -154,7 +154,9 @@ ros2 launch patrol_bringup patrol.launch.py \
   goal_turn_angle:=1.2 \
   scan_forward_bias:=0.35 \
   scan_angle_smoothing:=0.35 \
-  scan_angle_deadband:=0.08
+  scan_angle_deadband:=0.08 \
+  scan_goal_align_weight:=0.8 \
+  scan_prev_align_weight:=0.5
 ```
 
 如果出现“转弯转过头/方向反了”的情况，可以让大角速度时原地转向（示例）：
@@ -241,6 +243,7 @@ RViz2 里建议这样配置：
 ## 巡逻路径规划（基于墙体）
 
 `patrol_control/patrol_manager` 默认会解析 `models/patrol_environment/model.sdf` 里的 `Wall_*` 碰撞盒，构建 2D 栅格并在赛道区域里做 A* 规划，避免“直线去目标点会穿墙”的问题。
+同时支持把 Gazebo 里的 `obstacle_*` 动态纳入规划（订阅 `/gazebo/model_states`），避免“目标点在障碍物后面时左右摆头/卡住”。
 
 常用启动参数（`patrol.launch.py`）：
 
@@ -250,6 +253,9 @@ ros2 launch patrol_bringup patrol.launch.py use_path_planner:=false
 
 # 调精度/安全边距
 ros2 launch patrol_bringup patrol.launch.py grid_resolution:=0.05 wall_inflation:=0.30
+
+# 把动态障碍也纳入规划（更容易绕过盒子障碍）
+ros2 launch patrol_bringup patrol.launch.py use_dynamic_obstacles:=true obstacle_inflation:=0.17
 ```
 
 ## 动态障碍（两点往返）

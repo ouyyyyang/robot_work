@@ -504,7 +504,7 @@ class PatrolManager(Node):
         self.declare_parameter("world_sdf", "")
         self.declare_parameter("model_states_topic", "/gazebo/model_states")
         self.declare_parameter("use_dynamic_obstacles", True)
-        self.declare_parameter("obstacle_inflation", 0.20)
+        self.declare_parameter("obstacle_inflation", 0.17)
 
         self.declare_parameter("goal_tolerance", 0.35)
         self.declare_parameter("max_linear", 0.35)
@@ -526,7 +526,7 @@ class PatrolManager(Node):
         self.declare_parameter("use_path_planner", True)
         self.declare_parameter("grid_resolution", 0.10)
         self.declare_parameter("grid_margin", 1.0)
-        self.declare_parameter("wall_inflation", 0.20)
+        self.declare_parameter("wall_inflation", 0.17)
         self.declare_parameter("plan_interval", 1.0)
         self.declare_parameter("lookahead_distance", 0.7)
         self.declare_parameter("waypoint_tolerance", 0.35)
@@ -719,8 +719,16 @@ class PatrolManager(Node):
         self._pub_cmd.publish(t)
 
     @staticmethod
-    def _is_valid_scan_range(r: float, *, min_valid: float) -> bool:
-        return math.isfinite(r) and r >= min_valid
+    def _scan_range_value(*, r: float, min_valid: float, range_max: float) -> Optional[float]:
+        if math.isnan(r):
+            return None
+        if math.isinf(r):
+            return float(range_max) if range_max > 0.0 else None
+        if not math.isfinite(r):
+            return None
+        if r < min_valid:
+            return None
+        return float(r)
 
     def _scan_sector_min(self, scan: LaserScan, a0: float, a1: float) -> Optional[float]:
         if not scan.ranges:
@@ -744,16 +752,17 @@ class PatrolManager(Node):
             i0, i1 = i1, i0
 
         min_valid = max(float(scan.range_min), self._scan_min_valid)
-        finite = [
-            float(r)
-            for r in scan.ranges[i0 : i1 + 1]
-            if self._is_valid_scan_range(float(r), min_valid=min_valid)
-        ]
-        if finite:
-            return float(min(finite))
+        range_max = float(scan.range_max)
+        values: List[float] = []
+        for r in scan.ranges[i0 : i1 + 1]:
+            v = self._scan_range_value(r=float(r), min_valid=min_valid, range_max=range_max)
+            if v is not None:
+                values.append(v)
+        if values:
+            return float(min(values))
 
-        if scan.range_max > 0.0:
-            return float(scan.range_max)
+        if range_max > 0.0:
+            return float(range_max)
         return None
 
     def _scan_best_angle(
@@ -765,7 +774,7 @@ class PatrolManager(Node):
         desired_angle: float = 0.0,
         prev_angle: float = 0.0,
     ) -> float:
-        best_angle, _best_score = self._scan_best_angle_scored(
+        best_angle, _best_score, _best_range = self._scan_best_angle_scored(
             scan,
             max_abs_angle=max_abs_angle,
             side=side,
@@ -782,19 +791,21 @@ class PatrolManager(Node):
         side: Optional[float],
         desired_angle: float,
         prev_angle: float,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         if not scan.ranges:
-            return 0.0, float("-inf")
+            return 0.0, float("-inf"), 0.0
         if scan.angle_increment == 0.0:
-            return 0.0, float("-inf")
+            return 0.0, float("-inf"), 0.0
 
         amin = float(scan.angle_min)
         inc = float(scan.angle_increment)
         min_valid = max(float(scan.range_min), self._scan_min_valid)
+        range_max = float(scan.range_max)
 
         max_abs = max(0.0, float(max_abs_angle))
         best_score = float("-inf")
         best_angle = 0.0
+        best_range = 0.0
         bias = self._scan_bias
         goal_w = max(0.0, self._scan_goal_align)
         prev_w = max(0.0, self._scan_prev_align)
@@ -802,9 +813,10 @@ class PatrolManager(Node):
         prev_angle = _normalize_angle(prev_angle)
 
         for i, r in enumerate(scan.ranges):
-            rr = float(r)
-            if not self._is_valid_scan_range(rr, min_valid=min_valid):
+            v = self._scan_range_value(r=float(r), min_valid=min_valid, range_max=range_max)
+            if v is None:
                 continue
+            rr = float(v)
             ang = amin + i * inc
             if abs(ang) > max_abs:
                 continue
@@ -824,8 +836,9 @@ class PatrolManager(Node):
             if score > best_score:
                 best_score = score
                 best_angle = ang
+                best_range = rr
 
-        return float(best_angle), float(best_score)
+        return float(best_angle), float(best_score), float(best_range)
 
     def _tick(self) -> None:
         if self._idx >= len(self._points):
@@ -977,54 +990,6 @@ class PatrolManager(Node):
             dt = max(0.0, min(0.5, (now_ns - self._last_tick_ns) * 1e-9))
         self._last_tick_ns = now_ns
 
-        # Obstacle avoidance: keep a short "turn mode" with hysteresis to avoid twitching
-        # when measurements fluctuate around the threshold.
-        if front_min is not None and self._avoid_active:
-            if front_min >= self._obs_clear:
-                if self._avoid_clear_since_ns is None:
-                    self._avoid_clear_since_ns = now_ns
-            else:
-                self._avoid_clear_since_ns = None
-
-            min_turn_ok = (
-                self._avoid_start_ns is None
-                or (now_ns - self._avoid_start_ns) >= int(self._avoid_min_turn_s * 1e9)
-            )
-            clear_hold_ok = (
-                self._avoid_clear_since_ns is not None
-                and (now_ns - self._avoid_clear_since_ns)
-                >= int(self._avoid_clear_hold_s * 1e9)
-            )
-            if min_turn_ok and clear_hold_ok:
-                self._avoid_active = False
-                self._avoid_start_ns = None
-                self._avoid_clear_since_ns = None
-
-        if front_min is not None and self._avoid_active:
-            if (
-                left_min is not None
-                and right_min is not None
-                and abs(left_min - right_min) > self._avoid_dir_eps
-                and self._avoid_start_ns is not None
-                and (now_ns - self._avoid_start_ns) >= int(self._avoid_min_turn_s * 1e9)
-            ):
-                self._avoid_dir = 1.0 if left_min >= right_min else -1.0
-            self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
-            return
-
-        if front_min is not None and front_min < self._obs_stop:
-            if left_min is not None and right_min is not None and abs(left_min - right_min) > self._avoid_dir_eps:
-                self._avoid_dir = 1.0 if left_min >= right_min else -1.0
-            self._avoid_active = True
-            self._avoid_start_ns = now_ns
-            self._avoid_clear_since_ns = None
-            self._scan_angle_filt = 0.0
-            self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
-            self._path = None
-            self._path_goal_idx = None
-            self._path_idx = 0
-            return
-
         scan_available = bool(scan is not None and scan.ranges and scan.angle_increment != 0.0)
         goal_range: Optional[float] = None
         goal_blocked = False
@@ -1035,21 +1000,21 @@ class PatrolManager(Node):
 
         # Commit to a side when the goal direction is blocked, to avoid oscillating between
         # "turn to goal" and "avoid obstacle".
-        if not scan_available:
+        if not scan_available or self._avoid_active:
             self._pass_active = False
             self._pass_clear_since_ns = None
         else:
             if goal_blocked:
                 self._pass_clear_since_ns = None
                 if not self._pass_active:
-                    left_angle, left_score = self._scan_best_angle_scored(
+                    left_angle, left_score, _left_range = self._scan_best_angle_scored(
                         scan,
                         max_abs_angle=self._scan_side_angle,
                         side=1.0,
                         desired_angle=err,
                         prev_angle=self._scan_angle_filt,
                     )
-                    right_angle, right_score = self._scan_best_angle_scored(
+                    right_angle, right_score, _right_range = self._scan_best_angle_scored(
                         scan,
                         max_abs_angle=self._scan_side_angle,
                         side=-1.0,
@@ -1076,15 +1041,85 @@ class PatrolManager(Node):
                         self._pass_clear_since_ns = None
 
         scan_angle_raw = 0.0
+        scan_clearance: Optional[float] = None
         if scan_available:
             side = self._pass_dir if self._pass_active else None
-            scan_angle_raw = self._scan_best_angle(
+            scan_angle_raw, scan_score, scan_clearance = self._scan_best_angle_scored(
                 scan,
                 max_abs_angle=self._scan_side_angle,
                 side=side,
                 desired_angle=err,
                 prev_angle=self._scan_angle_filt,
             )
+            if not math.isfinite(scan_score):
+                scan_clearance = None
+
+        drive_clearance = scan_clearance if scan_clearance is not None else front_min
+
+        # Obstacle avoidance: decide based on the best drivable direction (scan), not the minimum
+        # distance in a wide front cone (which is too conservative in narrow gaps).
+        if drive_clearance is not None and self._avoid_active:
+            if drive_clearance >= self._obs_clear:
+                if self._avoid_clear_since_ns is None:
+                    self._avoid_clear_since_ns = now_ns
+            else:
+                self._avoid_clear_since_ns = None
+
+            min_turn_ok = (
+                self._avoid_start_ns is None
+                or (now_ns - self._avoid_start_ns) >= int(self._avoid_min_turn_s * 1e9)
+            )
+            clear_hold_ok = (
+                self._avoid_clear_since_ns is not None
+                and (now_ns - self._avoid_clear_since_ns)
+                >= int(self._avoid_clear_hold_s * 1e9)
+            )
+            if min_turn_ok and clear_hold_ok:
+                self._avoid_active = False
+                self._avoid_start_ns = None
+                self._avoid_clear_since_ns = None
+
+        if drive_clearance is not None and self._avoid_active:
+            # After a short minimum turn time, allow switching turn direction towards the
+            # more open side to reduce jitter.
+            if (
+                self._avoid_start_ns is not None
+                and (now_ns - self._avoid_start_ns) >= int(self._avoid_min_turn_s * 1e9)
+            ):
+                if scan_available and abs(scan_angle_raw) > 1e-3:
+                    self._avoid_dir = 1.0 if scan_angle_raw > 0.0 else -1.0
+                elif (
+                    left_min is not None
+                    and right_min is not None
+                    and abs(left_min - right_min) > self._avoid_dir_eps
+                ):
+                    self._avoid_dir = 1.0 if left_min >= right_min else -1.0
+            self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
+            return
+
+        if drive_clearance is not None and drive_clearance < self._obs_stop:
+            if scan_available and abs(scan_angle_raw) > 1e-3:
+                self._avoid_dir = 1.0 if scan_angle_raw > 0.0 else -1.0
+            elif (
+                left_min is not None
+                and right_min is not None
+                and abs(left_min - right_min) > self._avoid_dir_eps
+            ):
+                self._avoid_dir = 1.0 if left_min >= right_min else -1.0
+            else:
+                self._avoid_dir = 1.0 if err >= 0.0 else -1.0
+
+            self._avoid_active = True
+            self._avoid_start_ns = now_ns
+            self._avoid_clear_since_ns = None
+            self._pass_active = False
+            self._pass_clear_since_ns = None
+            self._scan_angle_filt = 0.0
+            self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
+            self._path = None
+            self._path_goal_idx = None
+            self._path_idx = 0
+            return
 
         scan_angle = scan_angle_raw
         if scan_available and self._scan_tau > 0.0:
@@ -1119,8 +1154,8 @@ class PatrolManager(Node):
                 goal_clearance = max(0.0, min(1.0, goal_range / self._obs_slow))
                 alpha *= goal_clearance
 
-            if front_min is not None and self._obs_slow > 0.0:
-                clearance = max(0.0, min(1.0, front_min / self._obs_slow))
+            if drive_clearance is not None and self._obs_slow > 0.0:
+                clearance = max(0.0, min(1.0, drive_clearance / self._obs_slow))
                 alpha *= clearance
 
         v_cmd = alpha * v_goal + (1.0 - alpha) * v_scan
@@ -1136,8 +1171,8 @@ class PatrolManager(Node):
         v_cmd = max(0.0, min(self._max_lin, v_cmd))
         w_cmd = max(-self._max_ang, min(self._max_ang, w_cmd))
 
-        if front_min is not None and front_min < self._obs_slow:
-            v_cmd *= max(0.0, min(1.0, front_min / self._obs_slow))
+        if drive_clearance is not None and drive_clearance < self._obs_slow:
+            v_cmd *= max(0.0, min(1.0, drive_clearance / self._obs_slow))
 
         self._publish_cmd(v_cmd, w_cmd)
 
