@@ -46,7 +46,7 @@
     <!-- Obstacles moved out of patrol_environment (easy to move via ROS2 /gazebo services) -->
     <model name="obstacle_1">
       <static>false</static>
-      <pose>3.974 5.786 0.25 0 0 0</pose>
+      <pose>3.724 4.986 0.25 0 0 0</pose>
       <link name="obstacle_1_link">
         <gravity>false</gravity>
         <self_collide>false</self_collide>
@@ -65,14 +65,14 @@
         <collision name="obstacle_1_collision">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
         </collision>
         <visual name="obstacle_1_visual">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
           <material>
@@ -85,7 +85,7 @@
 
     <model name="obstacle_2">
       <static>false</static>
-      <pose>4.524 -0.914 0.25 0 0 0</pose>
+      <pose>4.585 -0.999 0.25 0 0 0</pose>
       <link name="obstacle_2_link">
         <gravity>false</gravity>
         <self_collide>false</self_collide>
@@ -104,14 +104,14 @@
         <collision name="obstacle_2_collision">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
         </collision>
         <visual name="obstacle_2_visual">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
           <material>
@@ -124,7 +124,7 @@
 
     <model name="obstacle_3">
       <static>false</static>
-      <pose>0.174 -2.414 0.25 0 0 0</pose>
+      <pose>0.130 -2.308 0.25 0 0 0</pose>
       <link name="obstacle_3_link">
         <gravity>false</gravity>
         <self_collide>false</self_collide>
@@ -143,14 +143,14 @@
         <collision name="obstacle_3_collision">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
         </collision>
         <visual name="obstacle_3_visual">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
           <material>
@@ -163,7 +163,7 @@
 
     <model name="obstacle_4">
       <static>false</static>
-      <pose>-3.726 -2.014 0.25 0 0 0</pose>
+      <pose>-3.733 -1.870 0.25 0 0 0</pose>
       <link name="obstacle_4_link">
         <gravity>false</gravity>
         <self_collide>false</self_collide>
@@ -182,14 +182,14 @@
         <collision name="obstacle_4_collision">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
         </collision>
         <visual name="obstacle_4_visual">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
           <material>
@@ -221,14 +221,14 @@
         <collision name="obstacle_5_collision">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
         </collision>
         <visual name="obstacle_5_visual">
           <geometry>
             <box>
-              <size>0.6 0.6 0.5</size>
+              <size>0.4 0.4 0.5</size>
             </box>
           </geometry>
           <material>

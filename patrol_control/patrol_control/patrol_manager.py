@@ -459,6 +459,8 @@ class PatrolManager(Node):
         self.declare_parameter("scan_forward_bias", 0.25)
         self.declare_parameter("scan_angle_smoothing", 0.25)
         self.declare_parameter("scan_angle_deadband", 0.05)
+        self.declare_parameter("turn_in_place_angular", 1.0)
+        self.declare_parameter("pass_clear_hold_time", 0.25)
         self.declare_parameter("dwell_time", 2.0)
         self.declare_parameter("loop_patrol", True)
 
@@ -515,6 +517,8 @@ class PatrolManager(Node):
         self._scan_bias = max(0.0, min(1.0, self._scan_bias))
         self._scan_tau = max(0.0, float(self.get_parameter("scan_angle_smoothing").value))
         self._scan_deadband = max(0.0, float(self.get_parameter("scan_angle_deadband").value))
+        self._turn_in_place_w = max(0.0, float(self.get_parameter("turn_in_place_angular").value))
+        self._pass_clear_hold_s = max(0.0, float(self.get_parameter("pass_clear_hold_time").value))
         self._dwell_time = max(0.0, float(self.get_parameter("dwell_time").value))
         self._loop_patrol = bool(self.get_parameter("loop_patrol").value)
         self._lap_count = 0
@@ -575,6 +579,9 @@ class PatrolManager(Node):
         self._avoid_dir = 1.0
         self._avoid_start_ns: Optional[int] = None
         self._avoid_clear_since_ns: Optional[int] = None
+        self._pass_active = False
+        self._pass_dir = 1.0
+        self._pass_clear_since_ns: Optional[int] = None
         self._scan_angle_filt = 0.0
         self._last_tick_ns: Optional[int] = None
         self._path: Optional[List[Tuple[float, float]]] = None
@@ -655,7 +662,9 @@ class PatrolManager(Node):
             return float(scan.range_max)
         return None
 
-    def _scan_best_angle(self, scan: LaserScan, *, max_abs_angle: float) -> float:
+    def _scan_best_angle(
+        self, scan: LaserScan, *, max_abs_angle: float, side: Optional[float] = None
+    ) -> float:
         if not scan.ranges:
             return 0.0
         if scan.angle_increment == 0.0:
@@ -677,6 +686,11 @@ class PatrolManager(Node):
             ang = amin + i * inc
             if abs(ang) > max_abs:
                 continue
+            if side is not None:
+                if side > 0.0 and ang < 0.0:
+                    continue
+                if side < 0.0 and ang > 0.0:
+                    continue
             forward = max(0.0, math.cos(ang))
             score = rr * (bias + (1.0 - bias) * forward)
             if score > best_score:
@@ -715,6 +729,8 @@ class PatrolManager(Node):
             self._avoid_active = False
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
+            self._pass_active = False
+            self._pass_clear_since_ns = None
             self._idx += 1
             if self._loop_patrol and self._idx >= len(self._points) and self._points:
                 self._lap_count += 1
@@ -743,6 +759,8 @@ class PatrolManager(Node):
             self._avoid_active = False
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
+            self._pass_active = False
+            self._pass_clear_since_ns = None
             if (
                 self._last_vision in ("normal", "abnormal")
                 and self._last_vision_stamp_ns is not None
@@ -861,9 +879,47 @@ class PatrolManager(Node):
             return
 
         scan_available = bool(scan is not None and scan.ranges and scan.angle_increment != 0.0)
+        goal_range: Optional[float] = None
+        goal_blocked = False
+        if scan_available:
+            goal_range = self._scan_sector_min(scan, err - 0.25, err + 0.25)
+            if goal_range is not None and self._obs_slow > 0.0 and goal_range < self._obs_slow:
+                goal_blocked = True
+
+        # Commit to a side when the goal direction is blocked, to avoid oscillating between
+        # "turn to goal" and "avoid obstacle".
+        if not scan_available:
+            self._pass_active = False
+            self._pass_clear_since_ns = None
+        else:
+            if goal_blocked:
+                self._pass_clear_since_ns = None
+                if not self._pass_active:
+                    if (
+                        left_min is not None
+                        and right_min is not None
+                        and abs(left_min - right_min) > self._avoid_dir_eps
+                    ):
+                        self._pass_dir = 1.0 if left_min >= right_min else -1.0
+                    else:
+                        self._pass_dir = 1.0 if err >= 0.0 else -1.0
+                    self._pass_active = True
+            elif self._pass_active:
+                if goal_range is None or goal_range < self._obs_clear:
+                    self._pass_clear_since_ns = None
+                else:
+                    if self._pass_clear_since_ns is None:
+                        self._pass_clear_since_ns = now_ns
+                    if (now_ns - self._pass_clear_since_ns) >= int(self._pass_clear_hold_s * 1e9):
+                        self._pass_active = False
+                        self._pass_clear_since_ns = None
+
         scan_angle_raw = 0.0
         if scan_available:
-            scan_angle_raw = self._scan_best_angle(scan, max_abs_angle=self._scan_side_angle)
+            side = self._pass_dir if self._pass_active else None
+            scan_angle_raw = self._scan_best_angle(
+                scan, max_abs_angle=self._scan_side_angle, side=side
+            )
 
         scan_angle = scan_angle_raw
         if scan_available and self._scan_tau > 0.0:
@@ -889,12 +945,6 @@ class PatrolManager(Node):
             alpha_dist = self._goal_min_w + (1.0 - self._goal_min_w) * t_dist
             t_turn = max(0.0, min(1.0, abs(err) / self._goal_turn_angle))
             alpha_turn = self._goal_min_w + (1.0 - self._goal_min_w) * t_turn
-            goal_range: Optional[float] = None
-            goal_blocked = False
-            if scan is not None:
-                goal_range = self._scan_sector_min(scan, err - 0.25, err + 0.25)
-                if goal_range is not None and self._obs_slow > 0.0 and goal_range < self._obs_slow:
-                    goal_blocked = True
 
             # If the goal direction is blocked by an obstacle, avoid over-weighting "turn to goal"
             # (it causes the robot to stall and oscillate between goal-turn and obstacle avoidance).
@@ -915,6 +965,8 @@ class PatrolManager(Node):
             v_cmd *= 0.2
         elif abs(w_cmd) > 0.4:
             v_cmd *= 0.6
+        if self._turn_in_place_w > 0.0 and abs(w_cmd) >= self._turn_in_place_w:
+            v_cmd = 0.0
 
         v_cmd = max(0.0, min(self._max_lin, v_cmd))
         w_cmd = max(-self._max_ang, min(self._max_ang, w_cmd))

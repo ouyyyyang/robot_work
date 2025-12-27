@@ -30,6 +30,8 @@ def generate_launch_description() -> LaunchDescription:
     scan_forward_bias_arg = DeclareLaunchArgument("scan_forward_bias", default_value="0.25")
     scan_angle_smoothing_arg = DeclareLaunchArgument("scan_angle_smoothing", default_value="0.25")
     scan_angle_deadband_arg = DeclareLaunchArgument("scan_angle_deadband", default_value="0.05")
+    turn_in_place_angular_arg = DeclareLaunchArgument("turn_in_place_angular", default_value="1.0")
+    pass_clear_hold_time_arg = DeclareLaunchArgument("pass_clear_hold_time", default_value="0.25")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
     vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
@@ -42,10 +44,10 @@ def generate_launch_description() -> LaunchDescription:
     wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.25")
     lookahead_distance_arg = DeclareLaunchArgument("lookahead_distance", default_value="0.7")
     plan_interval_arg = DeclareLaunchArgument("plan_interval", default_value="1.0")
-    obstacle_a_x_arg = DeclareLaunchArgument("obstacle_a_x", default_value="3.974")
-    obstacle_a_y_arg = DeclareLaunchArgument("obstacle_a_y", default_value="5.786")
-    obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="4.024")
-    obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="3.836")
+    obstacle_a_x_arg = DeclareLaunchArgument("obstacle_a_x", default_value="3.724")
+    obstacle_a_y_arg = DeclareLaunchArgument("obstacle_a_y", default_value="4.986")
+    obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="2.824")
+    obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="5.136")
     obstacle_speed_arg = DeclareLaunchArgument("obstacle_speed", default_value="0.3")
     nav2_params_arg = DeclareLaunchArgument(
         "nav2_params",
@@ -174,6 +176,12 @@ def generate_launch_description() -> LaunchDescription:
                         "scan_angle_deadband": ParameterValue(
                             LaunchConfiguration("scan_angle_deadband"), value_type=float
                         ),
+                        "turn_in_place_angular": ParameterValue(
+                            LaunchConfiguration("turn_in_place_angular"), value_type=float
+                        ),
+                        "pass_clear_hold_time": ParameterValue(
+                            LaunchConfiguration("pass_clear_hold_time"), value_type=float
+                        ),
                         "dwell_time": ParameterValue(
                             LaunchConfiguration("dwell_time"), value_type=float
                         ),
@@ -233,6 +241,8 @@ def generate_launch_description() -> LaunchDescription:
             scan_forward_bias_arg,
             scan_angle_smoothing_arg,
             scan_angle_deadband_arg,
+            turn_in_place_angular_arg,
+            pass_clear_hold_time_arg,
             dwell_time_arg,
             loop_patrol_arg,
             vision_roi_size_arg,

@@ -176,7 +176,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 障碍物在 `worlds/patrol_world.sdf` 中定义为 5 个可碰撞盒子：
 
-- 尺寸：0.6 × 0.6 × 0.5（单位 m）
+- 尺寸：0.4 × 0.4 × 0.5（单位 m）
 - 初始高度：`z=0.25`（半高）
 - 设置：`<kinematic>true</kinematic>`（便于通过 ROS2 服务强制改 pose）
 
@@ -184,10 +184,10 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 | 障碍物 | 初始 pose (x,y,z) |
 |---|---|
-| obstacle_1 | ( 3.974,  5.786, 0.25) |
-| obstacle_2 | ( 4.524, -0.914, 0.25) |
-| obstacle_3 | ( 0.174, -2.414, 0.25) |
-| obstacle_4 | (-3.726, -2.014, 0.25) |
+| obstacle_1 | ( 3.724,  4.986, 0.25) |
+| obstacle_2 | ( 4.585, -0.999, 0.25) |
+| obstacle_3 | ( 0.130, -2.308, 0.25) |
+| obstacle_4 | (-3.733, -1.870, 0.25) |
 | obstacle_5 | (-8.776, -2.864, 0.25) |
 
 ---
@@ -413,7 +413,7 @@ ros2 launch patrol_bringup patrol.launch.py
 
 ```bash
 ros2 launch patrol_bringup patrol.launch.py \
-  obstacle_a_x:=3.974 obstacle_a_y:=5.786 \
-  obstacle_b_x:=4.024 obstacle_b_y:=3.836 \
+  obstacle_a_x:=3.724 obstacle_a_y:=4.986 \
+  obstacle_b_x:=2.824 obstacle_b_y:=5.136 \
   obstacle_speed:=0.4
 ```

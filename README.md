@@ -157,6 +157,12 @@ ros2 launch patrol_bringup patrol.launch.py \
   scan_angle_deadband:=0.08
 ```
 
+如果出现“转弯转过头/方向反了”的情况，可以让大角速度时原地转向（示例）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py turn_in_place_angular:=1.0
+```
+
 巡检点停留时间（默认 2 秒）：
 
 ```bash
@@ -263,10 +269,20 @@ ros2 launch patrol_bringup patrol.launch.py grid_resolution:=0.05 wall_inflation
 ```bash
 ros2 run patrol_control obstacle_controller --ros-args \
   -p obstacles:="[obstacle_1]" \
-  -p point_a_x:=3.974 -p point_a_y:=5.786 \
-  -p point_b_x:=4.024 -p point_b_y:=3.836 \
+  -p point_a_x:=3.724 -p point_a_y:=4.986 \
+  -p point_b_x:=2.824 -p point_b_y:=5.136 \
   -p speed:=0.4
 ```
+
+## 障碍物-墙缝隙宽度检查（可选）
+
+如果你想确认“障碍物与墙之间的缝隙”是否能让车穿过，可以在仓库根目录运行：
+
+```bash
+python3 tools/check_clearances.py --margin 0.10
+```
+
+它会根据 `models/patrol_robot/model.sdf` 估算车宽，并计算 `worlds/patrol_world.sdf` 里每个障碍物到最近墙体的最小间隙，方便你判断是否需要移动障碍物/减小尺寸/调整规划参数。
 
 ## 巡检点状态（红/蓝）
 
