@@ -13,7 +13,6 @@ class WheelJointStatePublisher(Node):
     def __init__(self) -> None:
         super().__init__("wheel_joint_state_publisher")
 
-        self.declare_parameter("use_sim_time", False)
         self.declare_parameter("odom_topic", "/patrol_robot/odom")
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter("wheel_separation", 0.32)

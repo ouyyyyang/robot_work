@@ -90,6 +90,34 @@ ros2 launch patrol_bringup gazebo.launch.py
 
 说明：`gazebo.launch.py` 只负责启动 Gazebo + 生成机器人，不会让车自动巡逻。
 
+#### 键盘控制（手动测试移动）
+
+建议只启动 `gazebo.launch.py`（不要启动 `patrol.launch.py`），避免 `patrol_manager` 同时发布 `/patrol_robot/cmd_vel` 和键盘抢控制。
+
+另开一个终端执行（把键盘速度指令重映射到 `/patrol_robot/cmd_vel`）：
+
+```bash
+cd ~/patrol_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/patrol_robot/cmd_vel
+```
+
+如果提示 `Package 'teleop_twist_keyboard' not found`，安装：
+
+```bash
+sudo apt update
+sudo apt install -y ros-humble-teleop-twist-keyboard
+```
+
+常用按键（以终端提示为准）：
+
+- 直走/后退：`i` 前进、`,` 后退、`k` 停止
+- 原地转向：`j` 左转、`l` 右转
+- 边走边转：`u` 前进左转、`o` 前进右转、`m` 后退左转、`.` 后退右转
+
+说明：终端里无法“同时按住两键组合”（比如按着 `i` 再按 `j`），每次按键都会直接发送一条新的 `/cmd_vel`，所以要边走边转请用 `u/o/m/.` 这类组合键。
+
 启动整套系统（Gazebo + 控制节点，Nav2 默认关闭）：
 
 ```bash
@@ -177,30 +205,10 @@ RViz2 里建议这样配置：
 说明：`gazebo.launch.py` 会启动 `robot_state_publisher`（发布机器人各 link 的 TF）和 `/joint_states`（轮子随运动转动），所以 RViz2 可以看到完整机器人模型与传感器 TF。
 提示：如果你把 `Fixed Frame` 设为 `map`，但没有启动 Nav2/SLAM（没有 `map->odom` TF），RViz2 会显示不出来，这是正常的。
 
-### RViz2 看不到 RobotModel/场地（Marker）怎么排查
+### 看“雷达/超声”可视化
 
-在 RViz2 打开着的情况下，新开一个终端执行（目录无所谓）：
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/patrol_ws/install/setup.bash
-
-ros2 node list | grep -E "robot_state_publisher|environment_markers|wheel_joint_state_publisher"
-ros2 topic list | grep -E "^/tf$|^/tf_static$|^/joint_states$|^/patrol/markers$|^/clock$"
-ros2 param get /robot_state_publisher robot_description | head
-ros2 topic echo /joint_states --once
-ros2 topic echo /patrol/markers --once
-ros2 run tf2_ros tf2_echo odom base_link
-ros2 run tf2_ros tf2_echo base_link left_wheel_link
-```
-
-只要上面能看到：
-
-- `/robot_state_publisher` 的 `robot_description` 有内容
-- `odom -> base_link` TF 能正常输出
-- `/patrol/markers` 能 echo 到 MarkerArray
-
-那么 RViz2 里把 `Fixed Frame` 设为 `odom`，并开启 `Use Sim Time=true`，RobotModel/MarkerArray 就应该能显示。
+- Gazebo：`models/patrol_robot/model.sdf` 里 `ultrasonic_sensor` 已设置 `<visualize>true</visualize>`，重启仿真后能在 Gazebo 里看到扇形射线。
+- RViz2：Add → `LaserScan` 订阅 `/patrol_robot/ultrasonic/scan` 就能看到扫描扇形；`/patrol_robot/ultrasonic/range` 是 `sensor_msgs/Range`（单个距离值），更适合 `rqt_plot`/`ros2 topic echo` 看数值。
 
 ## 巡逻路径规划（基于墙体）
 

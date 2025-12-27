@@ -26,6 +26,12 @@ def _parse_pose(text: str) -> Tuple[float, float, float, float, float, float]:
     return vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]
 
 
+def _rot(x: float, y: float, yaw: float) -> Tuple[float, float]:
+    c = math.cos(yaw)
+    s = math.sin(yaw)
+    return c * x - s * y, s * x + c * y
+
+
 class EnvironmentMarkers(Node):
     def __init__(self) -> None:
         super().__init__("environment_markers")
@@ -252,7 +258,7 @@ class EnvironmentMarkers(Node):
             mk.scale.y = float(spec.sy)
             mk.scale.z = float(spec.sz)
             mk.color.r = 1.0
-            mk.color.g = 0.0
+            mk.color.g = 1.0
             mk.color.b = 0.0
             mk.color.a = 0.8
             arr.markers.append(mk)
