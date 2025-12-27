@@ -12,7 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from sensor_msgs.msg import Range
+from sensor_msgs.msg import LaserScan, Range
 from std_msgs.msg import String
 
 import xml.etree.ElementTree as ET
@@ -442,7 +442,9 @@ class PatrolManager(Node):
         self.declare_parameter("cmd_vel_topic", "/patrol_robot/cmd_vel")
         self.declare_parameter("odom_topic", "/patrol_robot/odom")
         self.declare_parameter("range_topic", "/patrol_robot/ultrasonic/range")
+        self.declare_parameter("scan_topic", "/patrol_robot/ultrasonic/scan")
         self.declare_parameter("vision_status_topic", "/patrol/vision/status")
+        self.declare_parameter("vision_grace_period", 1.0)
         self.declare_parameter("environment_sdf", "")
 
         self.declare_parameter("goal_tolerance", 0.35)
@@ -463,10 +465,15 @@ class PatrolManager(Node):
 
         self.declare_parameter("obstacle_stop_distance", 0.45)
         self.declare_parameter("avoid_turn_angular", 1.0)
+        self.declare_parameter("obstacle_slow_distance", 0.90)
+        self.declare_parameter("scan_front_angle", 0.60)
+        self.declare_parameter("scan_side_angle", 1.20)
+        self.declare_parameter("scan_min_valid_range", 0.05)
 
         cmd_vel_topic = self.get_parameter("cmd_vel_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
         range_topic = self.get_parameter("range_topic").get_parameter_value().string_value
+        scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
         vision_topic = (
             self.get_parameter("vision_status_topic").get_parameter_value().string_value
         )
@@ -491,6 +498,7 @@ class PatrolManager(Node):
         self._dwell_time = max(0.0, float(self.get_parameter("dwell_time").value))
         self._loop_patrol = bool(self.get_parameter("loop_patrol").value)
         self._lap_count = 0
+        self._vision_grace_s = max(0.0, float(self.get_parameter("vision_grace_period").value))
 
         self._use_planner = bool(self.get_parameter("use_path_planner").value)
         self._plan_interval = float(self.get_parameter("plan_interval").value)
@@ -499,6 +507,12 @@ class PatrolManager(Node):
 
         self._obs_stop = float(self.get_parameter("obstacle_stop_distance").value)
         self._avoid_w = float(self.get_parameter("avoid_turn_angular").value)
+        self._obs_slow = float(self.get_parameter("obstacle_slow_distance").value)
+        if self._obs_slow < self._obs_stop:
+            self._obs_slow = self._obs_stop
+        self._scan_front_angle = float(self.get_parameter("scan_front_angle").value)
+        self._scan_side_angle = float(self.get_parameter("scan_side_angle").value)
+        self._scan_min_valid = float(self.get_parameter("scan_min_valid_range").value)
 
         self._grid: Optional[_WallGrid] = None
         if self._use_planner:
@@ -519,13 +533,17 @@ class PatrolManager(Node):
         self._pub_cmd = self.create_publisher(Twist, cmd_vel_topic, 10)
         self.create_subscription(Odometry, odom_topic, self._on_odom, 20)
         self.create_subscription(Range, range_topic, self._on_range, 20)
+        self.create_subscription(LaserScan, scan_topic, self._on_scan, 20)
         self.create_subscription(String, vision_topic, self._on_vision, 10)
 
         self._pose: Optional[Tuple[float, float, float]] = None
         self._range: Optional[float] = None
+        self._scan: Optional[LaserScan] = None
         self._last_vision: Optional[str] = None
+        self._last_vision_stamp_ns: Optional[int] = None
         self._waiting_vision = False
         self._current_result: Optional[str] = None
+        self._vision_wait_start_ns: Optional[int] = None
         self._dwell_until_ns: Optional[int] = None
         self._path: Optional[List[Tuple[float, float]]] = None
         self._path_idx: int = 0
@@ -547,9 +565,18 @@ class PatrolManager(Node):
             return
         self._range = float(msg.range)
 
+    def _on_scan(self, msg: LaserScan) -> None:
+        self._scan = msg
+
     def _on_vision(self, msg: String) -> None:
+        now_ns = self.get_clock().now().nanoseconds
         self._last_vision = msg.data.strip()
-        if self._waiting_vision and self._last_vision in ("normal", "abnormal"):
+        self._last_vision_stamp_ns = now_ns
+        if (
+            self._waiting_vision
+            and self._last_vision in ("normal", "abnormal")
+            and (self._vision_wait_start_ns is None or now_ns >= self._vision_wait_start_ns)
+        ):
             self._current_result = self._last_vision
 
     def _publish_cmd(self, v: float, w: float) -> None:
@@ -557,6 +584,44 @@ class PatrolManager(Node):
         t.linear.x = float(v)
         t.angular.z = float(w)
         self._pub_cmd.publish(t)
+
+    @staticmethod
+    def _is_valid_scan_range(r: float, *, min_valid: float) -> bool:
+        return math.isfinite(r) and r >= min_valid
+
+    def _scan_sector_min(self, scan: LaserScan, a0: float, a1: float) -> Optional[float]:
+        if not scan.ranges:
+            return None
+        if scan.angle_increment == 0.0:
+            return None
+
+        amin = float(scan.angle_min)
+        amax = float(scan.angle_max)
+        start = max(min(a0, a1), amin)
+        end = min(max(a0, a1), amax)
+        if end <= start:
+            return None
+
+        inc = float(scan.angle_increment)
+        i0 = int(math.floor((start - amin) / inc))
+        i1 = int(math.ceil((end - amin) / inc))
+        i0 = max(0, min(i0, len(scan.ranges) - 1))
+        i1 = max(0, min(i1, len(scan.ranges) - 1))
+        if i1 < i0:
+            i0, i1 = i1, i0
+
+        min_valid = max(float(scan.range_min), self._scan_min_valid)
+        finite = [
+            float(r)
+            for r in scan.ranges[i0 : i1 + 1]
+            if self._is_valid_scan_range(float(r), min_valid=min_valid)
+        ]
+        if finite:
+            return float(min(finite))
+
+        if scan.range_max > 0.0:
+            return float(scan.range_max)
+        return None
 
     def _tick(self) -> None:
         if self._idx >= len(self._points):
@@ -577,20 +642,13 @@ class PatrolManager(Node):
             if self._dwell_until_ns is not None and now_ns < self._dwell_until_ns:
                 return
 
-            if self._current_result is not None:
-                point = self._points[self._idx]
-                self.get_logger().info(f"[{point.name}] status={self._current_result}")
-            else:
-                point = self._points[self._idx]
-                status = (
-                    self._last_vision
-                    if self._last_vision in ("normal", "abnormal")
-                    else "unknown"
-                )
-                self.get_logger().info(f"[{point.name}] status={status}")
+            point = self._points[self._idx]
+            status = self._current_result if self._current_result is not None else "abnormal"
+            self.get_logger().info(f"[{point.name}] status={status}")
 
             self._current_result = None
             self._waiting_vision = False
+            self._vision_wait_start_ns = None
             self._dwell_until_ns = None
             self._idx += 1
             if self._loop_patrol and self._idx >= len(self._points) and self._points:
@@ -612,19 +670,19 @@ class PatrolManager(Node):
             self.get_logger().info(
                 f"Reached {goal.name}, dwelling {self._dwell_time:.1f}s..."
             )
+            now_ns = self.get_clock().now().nanoseconds
             self._waiting_vision = True
-            self._dwell_until_ns = (
-                self.get_clock().now().nanoseconds + int(self._dwell_time * 1e9)
-            )
+            self._vision_wait_start_ns = now_ns
+            self._dwell_until_ns = now_ns + int(self._dwell_time * 1e9)
             self._current_result = None
+            if (
+                self._last_vision in ("normal", "abnormal")
+                and self._last_vision_stamp_ns is not None
+                and (now_ns - self._last_vision_stamp_ns)
+                <= int(self._vision_grace_s * 1e9)
+            ):
+                self._current_result = self._last_vision
             self._publish_cmd(0.0, 0.0)
-            self._path = None
-            self._path_goal_idx = None
-            self._path_idx = 0
-            return
-
-        if self._range is not None and self._range < self._obs_stop:
-            self._publish_cmd(0.0, self._avoid_w)
             self._path = None
             self._path_goal_idx = None
             self._path_idx = 0
@@ -666,6 +724,42 @@ class PatrolManager(Node):
             v_cmd *= 0.2
         elif abs(err) > 0.4:
             v_cmd *= 0.6
+
+        scan = self._scan
+        front_min: Optional[float] = None
+        left_min: Optional[float] = None
+        right_min: Optional[float] = None
+        if scan is not None:
+            front_min = self._scan_sector_min(scan, -self._scan_front_angle, self._scan_front_angle)
+            left_min = self._scan_sector_min(scan, 0.0, self._scan_side_angle)
+            right_min = self._scan_sector_min(scan, -self._scan_side_angle, 0.0)
+
+        # Fallback (single Range) when scan not available.
+        if front_min is None:
+            front_min = self._range
+
+        if front_min is not None and front_min < self._obs_stop:
+            turn_dir = 1.0
+            if left_min is not None and right_min is not None:
+                turn_dir = 1.0 if left_min >= right_min else -1.0
+            self._publish_cmd(0.0, turn_dir * self._avoid_w)
+            self._path = None
+            self._path_goal_idx = None
+            self._path_idx = 0
+            return
+
+        if front_min is not None and front_min < self._obs_slow:
+            # Slow down and steer toward the side with more clearance.
+            turn_dir = 0.0
+            if left_min is not None and right_min is not None:
+                turn_dir = 1.0 if left_min >= right_min else -1.0
+            strength = (self._obs_slow - front_min) / max(1e-6, self._obs_slow - self._obs_stop)
+            strength = max(0.0, min(1.0, strength))
+            v_cmd *= max(0.0, min(1.0, front_min / self._obs_slow))
+            w_cmd = max(
+                -self._max_ang,
+                min(self._max_ang, w_cmd + turn_dir * strength * self._avoid_w),
+            )
 
         self._publish_cmd(v_cmd, w_cmd)
 

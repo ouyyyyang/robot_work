@@ -64,7 +64,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size="0.03 0.03 0.03"/>
+        <cylinder radius="0.015" length="0.03"/>
       </geometry>
       <material name="ultrasonic_orange">
         <color rgba="0.8 0.6 0.1 1.0"/>

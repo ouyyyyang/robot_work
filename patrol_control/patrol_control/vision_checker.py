@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from typing import Optional, Tuple
 
 import numpy as np
@@ -36,6 +35,9 @@ class VisionChecker(Node):
         self.declare_parameter("status_topic", "/patrol/vision/status")
         self.declare_parameter("roi_size", 80)
         self.declare_parameter("dominance_ratio", 1.25)
+        self.declare_parameter("min_channel_value", 60)
+        self.declare_parameter("min_pixel_fraction", 0.06)
+        self.declare_parameter("publish_interval", 0.2)
 
         image_topic = self.get_parameter("image_topic").get_parameter_value().string_value
         status_topic = self.get_parameter("status_topic").get_parameter_value().string_value
@@ -44,6 +46,12 @@ class VisionChecker(Node):
         self._dominance_ratio = float(
             self.get_parameter("dominance_ratio").get_parameter_value().double_value
         )
+        self._min_channel = float(
+            self.get_parameter("min_channel_value").get_parameter_value().integer_value
+        )
+        self._min_frac = float(self.get_parameter("min_pixel_fraction").value)
+        self._publish_interval = float(self.get_parameter("publish_interval").value)
+        self._last_pub_ns: int = 0
 
         self._pub = self.create_publisher(String, status_topic, 10)
         self.create_subscription(Image, image_topic, self._on_image, 10)
@@ -52,44 +60,67 @@ class VisionChecker(Node):
         self.get_logger().info(f"Subscribing: {image_topic}")
         self.get_logger().info(f"Publishing:  {status_topic}")
 
-    def _classify(self, rgb: np.ndarray) -> Tuple[str, float, float]:
+    def _classify(
+        self, rgb: np.ndarray
+    ) -> Tuple[Optional[str], float, float, float, float, float]:
         h, w, _ = rgb.shape
         roi = max(10, min(self._roi_size, h, w))
         x0 = (w - roi) // 2
         y0 = (h - roi) // 2
         patch = rgb[y0 : y0 + roi, x0 : x0 + roi, :].astype(np.float32)
 
-        mean_r = float(np.mean(patch[:, :, 0]))
-        mean_g = float(np.mean(patch[:, :, 1]))
-        mean_b = float(np.mean(patch[:, :, 2]))
+        r = patch[:, :, 0]
+        g = patch[:, :, 1]
+        b = patch[:, :, 2]
 
-        r = mean_r + 1e-6
-        b = mean_b + 1e-6
-        ratio_rb = r / b
+        mean_r = float(np.mean(r))
+        mean_g = float(np.mean(g))
+        mean_b = float(np.mean(b))
 
-        if ratio_rb >= self._dominance_ratio:
-            return "abnormal", mean_r, mean_b
-        if (1.0 / ratio_rb) >= self._dominance_ratio:
-            return "normal", mean_r, mean_b
+        dom = float(self._dominance_ratio)
+        min_ch = float(self._min_channel)
 
-        if mean_r + mean_b + mean_g < 30.0:
-            return "unknown", mean_r, mean_b
-        return "unknown", mean_r, mean_b
+        red_mask = (r >= dom * np.maximum(g, b)) & (r >= min_ch)
+        blue_mask = (b >= dom * np.maximum(r, g)) & (b >= min_ch)
+
+        total = int(r.size)
+        if total <= 0:
+            return None, 0.0, 0.0, mean_r, mean_g, mean_b
+        red_frac = float(np.count_nonzero(red_mask) / total)
+        blue_frac = float(np.count_nonzero(blue_mask) / total)
+
+        if red_frac < self._min_frac and blue_frac < self._min_frac:
+            return None, red_frac, blue_frac, mean_r, mean_g, mean_b
+
+        status = "abnormal" if red_frac >= blue_frac else "normal"
+        return status, red_frac, blue_frac, mean_r, mean_g, mean_b
 
     def _on_image(self, msg: Image) -> None:
         frame = _decode_rgb(msg)
         if frame is None:
             return
 
-        status, mean_r, mean_b = self._classify(frame)
-        if status == self._last_status:
+        status, red_frac, blue_frac, mean_r, mean_g, mean_b = self._classify(frame)
+        if status is None:
+            return
+
+        now_ns = self.get_clock().now().nanoseconds
+        if (
+            status == self._last_status
+            and self._publish_interval > 0.0
+            and (now_ns - self._last_pub_ns) < int(self._publish_interval * 1e9)
+        ):
             return
 
         self._last_status = status
+        self._last_pub_ns = now_ns
         out = String()
         out.data = status
         self._pub.publish(out)
-        self.get_logger().info(f"status={status} (mean_r={mean_r:.1f}, mean_b={mean_b:.1f})")
+        self.get_logger().info(
+            f"status={status} red={red_frac:.3f} blue={blue_frac:.3f} "
+            f"(mean_r={mean_r:.1f}, mean_g={mean_g:.1f}, mean_b={mean_b:.1f})"
+        )
 
 
 def main() -> None:
@@ -106,4 +137,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

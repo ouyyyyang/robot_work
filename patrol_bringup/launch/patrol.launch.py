@@ -16,8 +16,16 @@ def generate_launch_description() -> LaunchDescription:
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
     max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
     obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
+    obstacle_slow_distance_arg = DeclareLaunchArgument("obstacle_slow_distance", default_value="0.90")
+    scan_front_angle_arg = DeclareLaunchArgument("scan_front_angle", default_value="0.60")
+    scan_side_angle_arg = DeclareLaunchArgument("scan_side_angle", default_value="1.20")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
+    vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
+    vision_dominance_ratio_arg = DeclareLaunchArgument("vision_dominance_ratio", default_value="1.25")
+    vision_min_channel_value_arg = DeclareLaunchArgument("vision_min_channel_value", default_value="60")
+    vision_min_pixel_fraction_arg = DeclareLaunchArgument("vision_min_pixel_fraction", default_value="0.06")
+    vision_publish_interval_arg = DeclareLaunchArgument("vision_publish_interval", default_value="0.2")
     use_path_planner_arg = DeclareLaunchArgument("use_path_planner", default_value="true")
     grid_resolution_arg = DeclareLaunchArgument("grid_resolution", default_value="0.10")
     wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.25")
@@ -48,7 +56,26 @@ def generate_launch_description() -> LaunchDescription:
                 package="patrol_control",
                 executable="vision_checker",
                 output="screen",
-                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "roi_size": ParameterValue(
+                            LaunchConfiguration("vision_roi_size"), value_type=int
+                        ),
+                        "dominance_ratio": ParameterValue(
+                            LaunchConfiguration("vision_dominance_ratio"), value_type=float
+                        ),
+                        "min_channel_value": ParameterValue(
+                            LaunchConfiguration("vision_min_channel_value"), value_type=int
+                        ),
+                        "min_pixel_fraction": ParameterValue(
+                            LaunchConfiguration("vision_min_pixel_fraction"), value_type=float
+                        ),
+                        "publish_interval": ParameterValue(
+                            LaunchConfiguration("vision_publish_interval"), value_type=float
+                        ),
+                    }
+                ],
             ),
             Node(
                 package="patrol_control",
@@ -93,6 +120,15 @@ def generate_launch_description() -> LaunchDescription:
                         ),
                         "obstacle_stop_distance": ParameterValue(
                             LaunchConfiguration("obstacle_stop_distance"), value_type=float
+                        ),
+                        "obstacle_slow_distance": ParameterValue(
+                            LaunchConfiguration("obstacle_slow_distance"), value_type=float
+                        ),
+                        "scan_front_angle": ParameterValue(
+                            LaunchConfiguration("scan_front_angle"), value_type=float
+                        ),
+                        "scan_side_angle": ParameterValue(
+                            LaunchConfiguration("scan_side_angle"), value_type=float
                         ),
                         "dwell_time": ParameterValue(
                             LaunchConfiguration("dwell_time"), value_type=float
@@ -139,8 +175,16 @@ def generate_launch_description() -> LaunchDescription:
             use_sim_time_arg,
             max_linear_arg,
             obstacle_stop_distance_arg,
+            obstacle_slow_distance_arg,
+            scan_front_angle_arg,
+            scan_side_angle_arg,
             dwell_time_arg,
             loop_patrol_arg,
+            vision_roi_size_arg,
+            vision_dominance_ratio_arg,
+            vision_min_channel_value_arg,
+            vision_min_pixel_fraction_arg,
+            vision_publish_interval_arg,
             use_path_planner_arg,
             grid_resolution_arg,
             wall_inflation_arg,

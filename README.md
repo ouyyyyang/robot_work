@@ -169,7 +169,7 @@ gazebo --verbose worlds/patrol_world.sdf
 - 相机：`/patrol_robot/front_camera/image_raw`
 - 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
 - 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，61 束，约 πrad 视场角（车头前方半圆））
-- 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色）
+- 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色；只有当相机 ROI 内红/蓝像素占比超过阈值时才发布，避免把黄色障碍等其它颜色误判为检查点）
 
 ## RViz2 可视化
 
