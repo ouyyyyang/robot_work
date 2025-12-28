@@ -196,6 +196,12 @@ sudo apt install -y ros-humble-nav2-* ros-humble-slam-toolbox
 ros2 launch patrol_bringup patrol.launch.py use_nav2:=true
 ```
 
+如果你已经保存了地图，想用“定位+导航”（不建图），可以这样启动：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py use_nav2:=true slam:=false map:=/absolute/path/to/your_map.yaml
+```
+
 巡检结果会在到达每个检查点并停留后发布到：
 
 - `/patrol/inspection/report`（格式：`patrol_point_N:normal|abnormal`）

@@ -54,6 +54,7 @@ def generate_launch_description() -> LaunchDescription:
     obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="5.136")
     obstacle_speed_arg = DeclareLaunchArgument("obstacle_speed", default_value="0.3")
     slam_arg = DeclareLaunchArgument("slam", default_value="true")
+    map_arg = DeclareLaunchArgument("map", default_value="")
     slam_params_arg = DeclareLaunchArgument(
         "slam_params",
         default_value=PathJoinSubstitution([bringup_share, "config", "slam_toolbox.yaml"]),
@@ -263,6 +264,7 @@ def generate_launch_description() -> LaunchDescription:
                 launch_arguments={
                     "use_sim_time": LaunchConfiguration("use_sim_time"),
                     "slam": LaunchConfiguration("slam"),
+                    "map": LaunchConfiguration("map"),
                     "params_file": LaunchConfiguration("nav2_params"),
                     "slam_params_file": LaunchConfiguration("slam_params"),
                     "autostart": "true",
@@ -315,6 +317,7 @@ def generate_launch_description() -> LaunchDescription:
             obstacle_b_y_arg,
             obstacle_speed_arg,
             slam_arg,
+            map_arg,
             slam_params_arg,
             nav2_params_arg,
             gazebo,
