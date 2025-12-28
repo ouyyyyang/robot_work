@@ -30,6 +30,7 @@ setup(
         "console_scripts": [
             "obstacle_controller = patrol_control.obstacle_controller:main",
             "patrol_manager = patrol_control.patrol_manager:main",
+            "nav2_patrol_manager = patrol_control.nav2_patrol_manager:main",
             "scan_to_range = patrol_control.scan_to_range:main",
             "vision_checker = patrol_control.vision_checker:main",
             "environment_markers = patrol_control.environment_markers:main",

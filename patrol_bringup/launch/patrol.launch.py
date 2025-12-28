@@ -1,9 +1,9 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
@@ -53,6 +53,11 @@ def generate_launch_description() -> LaunchDescription:
     obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="2.824")
     obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="5.136")
     obstacle_speed_arg = DeclareLaunchArgument("obstacle_speed", default_value="0.3")
+    slam_arg = DeclareLaunchArgument("slam", default_value="true")
+    slam_params_arg = DeclareLaunchArgument(
+        "slam_params",
+        default_value=PathJoinSubstitution([bringup_share, "config", "slam_toolbox.yaml"]),
+    )
     nav2_params_arg = DeclareLaunchArgument(
         "nav2_params",
         default_value=PathJoinSubstitution([bringup_share, "config", "nav2_params.yaml"]),
@@ -129,6 +134,7 @@ def generate_launch_description() -> LaunchDescription:
                 package="patrol_control",
                 executable="patrol_manager",
                 output="screen",
+                condition=UnlessCondition(LaunchConfiguration("use_nav2")),
                 parameters=[
                     {
                         "use_sim_time": LaunchConfiguration("use_sim_time"),
@@ -222,19 +228,47 @@ def generate_launch_description() -> LaunchDescription:
                     }
                 ],
             ),
+            Node(
+                package="patrol_control",
+                executable="nav2_patrol_manager",
+                output="screen",
+                condition=IfCondition(LaunchConfiguration("use_nav2")),
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "dwell_time": ParameterValue(
+                            LaunchConfiguration("dwell_time"), value_type=float
+                        ),
+                        "loop_patrol": ParameterValue(
+                            LaunchConfiguration("loop_patrol"), value_type=bool
+                        ),
+                    }
+                ],
+            ),
         ]
     )
 
-    # Optional Nav2 bringup (requires additional setup: localization, map, etc.)
-    nav2 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([nav2_share, "launch", "bringup_launch.py"])
-        ),
-        condition=IfCondition(LaunchConfiguration("use_nav2")),
-        launch_arguments={
-            "use_sim_time": LaunchConfiguration("use_sim_time"),
-            "params_file": LaunchConfiguration("nav2_params"),
-        }.items(),
+    # Optional Nav2 bringup (SLAM by default).
+    # Topic remaps connect Nav2's default topics to this project's robot namespace.
+    nav2 = GroupAction(
+        actions=[
+            SetRemap(src="scan", dst="/patrol_robot/ultrasonic/scan"),
+            SetRemap(src="odom", dst="/patrol_robot/odom"),
+            SetRemap(src="cmd_vel", dst="/patrol_robot/cmd_vel"),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution([nav2_share, "launch", "bringup_launch.py"])
+                ),
+                condition=IfCondition(LaunchConfiguration("use_nav2")),
+                launch_arguments={
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "slam": LaunchConfiguration("slam"),
+                    "params_file": LaunchConfiguration("nav2_params"),
+                    "slam_params_file": LaunchConfiguration("slam_params"),
+                    "autostart": "true",
+                }.items(),
+            ),
+        ]
     )
 
     return LaunchDescription(
@@ -280,6 +314,8 @@ def generate_launch_description() -> LaunchDescription:
             obstacle_b_x_arg,
             obstacle_b_y_arg,
             obstacle_speed_arg,
+            slam_arg,
+            slam_params_arg,
             nav2_params_arg,
             gazebo,
             nav2,

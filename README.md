@@ -118,7 +118,7 @@ sudo apt install -y ros-humble-teleop-twist-keyboard
 
 说明：终端里无法“同时按住两键组合”（比如按着 `i` 再按 `j`），每次按键都会直接发送一条新的 `/cmd_vel`，所以要边走边转请用 `u/o/m/.` 这类组合键。
 
-启动整套系统（Gazebo + 控制节点，Nav2 默认关闭）：
+启动整套系统（Gazebo + 控制节点）：
 
 ```bash
 cd ~/patrol_ws   # 或 cd ~/Desktop/robot_work（取决于你用哪种方式构建）
@@ -126,6 +126,10 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch patrol_bringup patrol.launch.py
 ```
+
+默认 `use_nav2:=false`：使用 `patrol_control/patrol_manager`（自研巡逻 + 超声避障 + 可选 A* 规划）。
+
+启用 `use_nav2:=true`：使用 **Nav2 + slam_toolbox** 进行建图与导航，并切换为 `patrol_control/nav2_patrol_manager` 依次巡检 1~5 号检查点。
 
 调快巡逻速度 / 提前避障（示例）：
 
@@ -177,11 +181,24 @@ ros2 launch patrol_bringup patrol.launch.py dwell_time:=2.0
 ros2 launch patrol_bringup patrol.launch.py loop_patrol:=true
 ```
 
-可选启用 Nav2（需要你补齐定位/地图/TF 等配置）：
+启用 Nav2 + SLAM（推荐）
+
+先安装依赖（只需要做一次）：
+
+```bash
+sudo apt update
+sudo apt install -y ros-humble-nav2-* ros-humble-slam-toolbox
+```
+
+启动（默认 `slam:=true`）：
 
 ```bash
 ros2 launch patrol_bringup patrol.launch.py use_nav2:=true
 ```
+
+巡检结果会在到达每个检查点并停留后发布到：
+
+- `/patrol/inspection/report`（格式：`patrol_point_N:normal|abnormal`）
 
 ### 方式 B：直接打开 Gazebo world（不含自动生成机器人）
 
@@ -196,10 +213,13 @@ gazebo --verbose worlds/patrol_world.sdf
 
 - 机器人速度：`/patrol_robot/cmd_vel`
 - 里程计：`/patrol_robot/odom`
+- 地图（Nav2+SLAM）：`/map`
 - 相机：`/patrol_robot/front_camera/image_raw`
 - 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
 - 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，61 束，约 πrad 视场角（车头前方半圆））
 - 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色；只有当相机 ROI 内红/蓝像素占比超过阈值时才发布，避免把黄色障碍等其它颜色误判为检查点）
+- 环境标记：`/patrol/markers`（墙体/巡检点/障碍物 MarkerArray）
+- 巡检报告（Nav2+SLAM）：`/patrol/inspection/report`
 
 ## RViz2 可视化
 
@@ -223,7 +243,9 @@ rviz2 --ros-args -p use_sim_time:=true
 
 RViz2 里建议这样配置：
 
-- `Fixed Frame` 设为 `odom`
+- `Fixed Frame`：
+  - 不用 Nav2：设为 `odom`
+  - 用 Nav2+SLAM：设为 `map`
 - `Global Options -> Use Sim Time` 设为 `true`（否则 TF 会因为时间戳不匹配而显示不出来）
 - Add → `TF`（看 TF 树）
 - Add → `Odometry`，Topic 选 `/patrol_robot/odom`
@@ -231,6 +253,7 @@ RViz2 里建议这样配置：
 - Add → `Image`，Topic 选 `/patrol_robot/front_camera/image_raw`
 - Add → `RobotModel`（显示机器人 3D 模型，使用 `robot_description`）
 - Add → `MarkerArray`，Topic 选 `/patrol/markers`（显示墙体/巡检点/障碍物）
+- （Nav2+SLAM）Add → `Map`，Topic 选 `/map`
 
 说明：`gazebo.launch.py` 会启动 `robot_state_publisher`（发布机器人各 link 的 TF）和 `/joint_states`（轮子随运动转动），所以 RViz2 可以看到完整机器人模型与传感器 TF。
 提示：如果你把 `Fixed Frame` 设为 `map`，但没有启动 Nav2/SLAM（没有 `map->odom` TF），RViz2 会显示不出来，这是正常的。
@@ -241,6 +264,8 @@ RViz2 里建议这样配置：
 - RViz2：Add → `LaserScan` 订阅 `/patrol_robot/ultrasonic/scan` 就能看到扫描扇形；`/patrol_robot/ultrasonic/range` 是 `sensor_msgs/Range`（单个距离值），更适合 `rqt_plot`/`ros2 topic echo` 看数值。
 
 ## 巡逻路径规划（基于墙体）
+
+本节仅适用于 `use_nav2:=false`（使用自研 `patrol_manager`）。启用 Nav2 后，路径规划 / 避障由 Nav2 的全局/局部代价地图与控制器负责。
 
 `patrol_control/patrol_manager` 默认会解析 `models/patrol_environment/model.sdf` 里的 `Wall_*` 碰撞盒，构建 2D 栅格并在赛道区域里做 A* 规划，避免“直线去目标点会穿墙”的问题。
 同时支持把 Gazebo 里的 `obstacle_*` 动态纳入规划（订阅 `/gazebo/model_states`），避免“目标点在障碍物后面时左右摆头/卡住”。

@@ -17,6 +17,7 @@
 
   <!-- Optional (used by patrol.launch.py when enabled) -->
   <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
 
   <exec_depend>patrol_control</exec_depend>
 
