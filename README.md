@@ -218,6 +218,7 @@ gazebo --verbose worlds/patrol_world.sdf
 ## 关键话题
 
 - 机器人速度：`/patrol_robot/cmd_vel`
+- Nav2 速度（转发前）：`/cmd_vel`、`/cmd_vel_smoothed`、`/cmd_vel_nav`（由 `patrol_control/twist_relay` 转发到 `/patrol_robot/cmd_vel`）
 - 里程计：`/patrol_robot/odom`
 - 地图（Nav2+SLAM）：`/map`
 - 相机：`/patrol_robot/front_camera/image_raw`
@@ -429,4 +430,48 @@ sudo apt install -y ros-humble-gazebo-ros-pkgs ros-humble-gazebo-plugins
 
 ```bash
 ls /opt/ros/humble/lib | grep -E "libgazebo_ros_(diff_drive|camera|range)\\.so"
+```
+
+### 3) Nav2 一直卡在 `Waiting for service controller_server/get_state...`
+
+这通常表示 Nav2 的 `controller_server` 没有成功启动（最常见原因：缺少控制器插件包 / 参数文件配置错误导致进程直接退出），所以生命周期管理器一直等不到它的 `get_state` 服务。
+
+按下面顺序排查：
+
+```bash
+# 1) 看 controller_server 是否存在（正常应能看到）
+ros2 node list | grep controller_server
+
+# 2) 看 Nav2 组件容器 / controller_server 的报错日志（通常会提示缺哪个 plugin）
+ls -t ~/.ros/log/* | head
+```
+
+确保依赖已安装（推荐直接装全套）：
+
+```bash
+sudo apt update
+sudo apt install -y ros-humble-nav2-* ros-humble-slam-toolbox
+```
+
+### 4) Nav2 都启动了，但机器人完全不动
+
+优先按这个顺序排查（通常是 `/cmd_vel` 没有进到 `/patrol_robot/cmd_vel`，或巡检节点没成功发 goal）：
+
+```bash
+# 1) 确认巡检 goal 发送节点在跑（use_nav2:=true 时应存在）
+ros2 node list | grep nav2_patrol_manager
+
+# 2) 确认 Nav2 的动作服务器存在
+ros2 action list | grep -E "^/navigate_to_pose$"
+
+# 3) 看 Nav2 是否在产生速度（这里任意一个有频率都算）
+ros2 topic hz /cmd_vel
+ros2 topic hz /cmd_vel_smoothed
+ros2 topic hz /cmd_vel_nav
+
+# 4) 看最终机器人是否收到速度
+ros2 topic hz /patrol_robot/cmd_vel
+
+# 5) 确认转发节点在跑（use_nav2:=true 时应存在）
+ros2 node list | grep twist_relay
 ```

@@ -134,6 +134,13 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="patrol_control",
+                executable="twist_relay",
+                output="screen",
+                condition=IfCondition(LaunchConfiguration("use_nav2")),
+                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+            ),
+            Node(
+                package="patrol_control",
                 executable="patrol_manager",
                 output="screen",
                 condition=UnlessCondition(LaunchConfiguration("use_nav2")),

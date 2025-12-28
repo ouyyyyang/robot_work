@@ -14,7 +14,7 @@ slam_toolbox:
     base_frame: base_link
 
     # Input
-    scan_topic: scan
+    scan_topic: /patrol_robot/ultrasonic/scan
 
     # Mapping basics
     mode: mapping

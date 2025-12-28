@@ -14,8 +14,11 @@ from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.time import Time
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
+
+import tf2_geometry_msgs  # noqa: F401  (registers geometry conversions for tf2 in Python)
 
 
 def _yaw_to_quat(yaw: float) -> Tuple[float, float, float, float]:
@@ -51,7 +54,10 @@ class Nav2PatrolManager(Node):
 
         self.declare_parameter("action_name", "navigate_to_pose")
         self.declare_parameter("goal_frame", "map")
-        self.declare_parameter("point_frame", "odom")
+        # Patrol points in this project are authored in Gazebo world coordinates.
+        # Gazebo diff-drive odom is also world-referenced by default, and SLAM/AMCL provides map->odom.
+        # Using map as the default avoids waiting for a TF transform at startup.
+        self.declare_parameter("point_frame", "map")
         self.declare_parameter("environment_sdf", "")
         self.declare_parameter("dwell_time", 2.0)
         self.declare_parameter("loop_patrol", True)
@@ -110,6 +116,8 @@ class Nav2PatrolManager(Node):
         self._send_goal_future = None
         self._result_future = None
         self._active_goal_handle = None
+
+        self._last_tf_warn_ns: int = 0
 
         self.create_timer(0.1, self._tick)
 
@@ -177,13 +185,17 @@ class Nav2PatrolManager(Node):
             return
 
         if self._state == "SEND_GOAL":
-            goal = self._build_goal(self._points[self._idx])
+            point = self._points[self._idx]
+            goal = self._build_goal(point)
             if goal is None:
                 return
             self._goal_start = now
             self._send_goal_future = self._client.send_goal_async(goal)
             self._state = "WAIT_GOAL_RESPONSE"
             self._state_start = now
+            self.get_logger().info(
+                f"Sending goal: {point.name} (x={point.x:.2f}, y={point.y:.2f}, yaw={point.yaw:.2f})"
+            )
             return
 
         if self._state == "WAIT_GOAL_RESPONSE":
@@ -267,8 +279,11 @@ class Nav2PatrolManager(Node):
                 self._state = "IDLE"
 
     def _build_goal(self, point: PatrolPoint) -> Optional[NavigateToPose.Goal]:
+        now_msg = self.get_clock().now().to_msg()
+
         pose = PoseStamped()
-        pose.header.stamp = self.get_clock().now().to_msg()
+        # Use "latest available" TF for frame transforms (stamp=0), then overwrite to now.
+        pose.header.stamp = Time().to_msg()
         pose.header.frame_id = self._point_frame
         pose.pose.position.x = float(point.x)
         pose.pose.position.y = float(point.y)
@@ -286,12 +301,29 @@ class Nav2PatrolManager(Node):
                     self._goal_frame,
                     timeout=Duration(seconds=0.2),
                 )
-            except TransformException:
+            except TransformException as exc:
+                self._warn_tf_throttled(
+                    f"Waiting for TF: {self._goal_frame} <- {self._point_frame} ({exc})"
+                )
                 return None
+            except Exception as exc:  # tf2 may raise TypeException if conversions aren't registered
+                self._warn_tf_throttled(
+                    f"TF transform failed: {self._goal_frame} <- {self._point_frame} ({exc})"
+                )
+                return None
+
+        pose.header.stamp = now_msg
 
         goal = NavigateToPose.Goal()
         goal.pose = pose
         return goal
+
+    def _warn_tf_throttled(self, text: str, period_s: float = 1.0) -> None:
+        now_ns = int(self.get_clock().now().nanoseconds)
+        if now_ns - self._last_tf_warn_ns < int(period_s * 1e9):
+            return
+        self._last_tf_warn_ns = now_ns
+        self.get_logger().warn(text)
 
 
 def main() -> None:
@@ -308,4 +340,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
