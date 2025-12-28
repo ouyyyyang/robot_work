@@ -2,7 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -53,7 +53,8 @@ def generate_launch_description() -> LaunchDescription:
     obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="2.824")
     obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="5.136")
     obstacle_speed_arg = DeclareLaunchArgument("obstacle_speed", default_value="0.3")
-    slam_arg = DeclareLaunchArgument("slam", default_value="true")
+    # NOTE: nav2_bringup uses PythonExpression for some booleans; prefer "True/False".
+    slam_arg = DeclareLaunchArgument("slam", default_value="True")
     map_arg = DeclareLaunchArgument("map", default_value="")
     slam_params_arg = DeclareLaunchArgument(
         "slam_params",
@@ -251,6 +252,12 @@ def generate_launch_description() -> LaunchDescription:
 
     # Optional Nav2 bringup (SLAM by default).
     # Topic remaps connect Nav2's default topics to this project's robot namespace.
+    nav2_use_sim_time = PythonExpression(
+        ["'", LaunchConfiguration("use_sim_time"), "'.lower() in ['true','1','yes']"]
+    )
+    nav2_slam = PythonExpression(
+        ["'", LaunchConfiguration("slam"), "'.lower() in ['true','1','yes']"]
+    )
     nav2 = GroupAction(
         actions=[
             SetRemap(src="scan", dst="/patrol_robot/ultrasonic/scan"),
@@ -262,12 +269,12 @@ def generate_launch_description() -> LaunchDescription:
                 ),
                 condition=IfCondition(LaunchConfiguration("use_nav2")),
                 launch_arguments={
-                    "use_sim_time": LaunchConfiguration("use_sim_time"),
-                    "slam": LaunchConfiguration("slam"),
+                    "use_sim_time": nav2_use_sim_time,
+                    "slam": nav2_slam,
                     "map": LaunchConfiguration("map"),
                     "params_file": LaunchConfiguration("nav2_params"),
                     "slam_params_file": LaunchConfiguration("slam_params"),
-                    "autostart": "true",
+                    "autostart": "True",
                 }.items(),
             ),
         ]
