@@ -475,3 +475,13 @@ ros2 topic hz /patrol_robot/cmd_vel
 # 5) 确认转发节点在跑（use_nav2:=true 时应存在）
 ros2 node list | grep twist_relay
 ```
+
+### 5) `local_costmap` 报 “Timed out waiting for transform … base_link to odom”
+
+这表示 **TF 里缺少 `odom -> base_link`**（Nav2 必需的里程计坐标变换）。本工程使用 `patrol_control/odom_tf_broadcaster` 从 `/patrol_robot/odom` 自动广播该 TF。
+
+```bash
+ros2 node list | grep odom_tf_broadcaster
+ros2 topic echo /patrol_robot/odom --once
+ros2 run tf2_ros tf2_echo odom base_link
+```
