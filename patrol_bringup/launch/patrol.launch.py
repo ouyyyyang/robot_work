@@ -23,6 +23,11 @@ def generate_launch_description() -> LaunchDescription:
     avoid_min_turn_time_arg = DeclareLaunchArgument("avoid_min_turn_time", default_value="0.35")
     avoid_clear_hold_time_arg = DeclareLaunchArgument("avoid_clear_hold_time", default_value="0.15")
     avoid_dir_hysteresis_arg = DeclareLaunchArgument("avoid_dir_hysteresis", default_value="0.08")
+    avoid_backup_linear_arg = DeclareLaunchArgument("avoid_backup_linear", default_value="-0.08")
+    avoid_backup_time_arg = DeclareLaunchArgument("avoid_backup_time", default_value="0.6")
+    avoid_backup_trigger_time_arg = DeclareLaunchArgument("avoid_backup_trigger_time", default_value="2.0")
+    avoid_backup_cooldown_arg = DeclareLaunchArgument("avoid_backup_cooldown", default_value="2.0")
+    avoid_backup_angular_scale_arg = DeclareLaunchArgument("avoid_backup_angular_scale", default_value="0.8")
     scan_front_angle_arg = DeclareLaunchArgument("scan_front_angle", default_value="0.60")
     scan_side_angle_arg = DeclareLaunchArgument("scan_side_angle", default_value="1.57")
     goal_min_weight_arg = DeclareLaunchArgument("goal_min_weight", default_value="0.25")
@@ -181,6 +186,21 @@ def generate_launch_description() -> LaunchDescription:
                         "avoid_dir_hysteresis": ParameterValue(
                             LaunchConfiguration("avoid_dir_hysteresis"), value_type=float
                         ),
+                        "avoid_backup_linear": ParameterValue(
+                            LaunchConfiguration("avoid_backup_linear"), value_type=float
+                        ),
+                        "avoid_backup_time": ParameterValue(
+                            LaunchConfiguration("avoid_backup_time"), value_type=float
+                        ),
+                        "avoid_backup_trigger_time": ParameterValue(
+                            LaunchConfiguration("avoid_backup_trigger_time"), value_type=float
+                        ),
+                        "avoid_backup_cooldown": ParameterValue(
+                            LaunchConfiguration("avoid_backup_cooldown"), value_type=float
+                        ),
+                        "avoid_backup_angular_scale": ParameterValue(
+                            LaunchConfiguration("avoid_backup_angular_scale"), value_type=float
+                        ),
                         "scan_front_angle": ParameterValue(
                             LaunchConfiguration("scan_front_angle"), value_type=float
                         ),
@@ -314,6 +334,11 @@ def generate_launch_description() -> LaunchDescription:
             avoid_min_turn_time_arg,
             avoid_clear_hold_time_arg,
             avoid_dir_hysteresis_arg,
+            avoid_backup_linear_arg,
+            avoid_backup_time_arg,
+            avoid_backup_trigger_time_arg,
+            avoid_backup_cooldown_arg,
+            avoid_backup_angular_scale_arg,
             scan_front_angle_arg,
             scan_side_angle_arg,
             goal_min_weight_arg,

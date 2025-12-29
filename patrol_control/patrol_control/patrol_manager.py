@@ -542,6 +542,13 @@ class PatrolManager(Node):
         self.declare_parameter("avoid_min_turn_time", 0.35)
         self.declare_parameter("avoid_clear_hold_time", 0.15)
         self.declare_parameter("avoid_dir_hysteresis", 0.08)
+        # If the robot is stuck in a corner while in avoidance mode, do a short backup + turn to
+        # free the wheels from the wall corner.
+        self.declare_parameter("avoid_backup_linear", -0.08)  # m/s (negative = reverse)
+        self.declare_parameter("avoid_backup_time", 0.6)  # s
+        self.declare_parameter("avoid_backup_trigger_time", 2.0)  # s (time stuck before backing)
+        self.declare_parameter("avoid_backup_cooldown", 2.0)  # s (min time between backups)
+        self.declare_parameter("avoid_backup_angular_scale", 0.8)  # scale * avoid_turn_angular
         self.declare_parameter("scan_front_angle", 0.60)
         self.declare_parameter("scan_side_angle", 1.57)
         self.declare_parameter("scan_min_valid_range", 0.05)
@@ -619,6 +626,19 @@ class PatrolManager(Node):
         self._avoid_min_turn_s = max(0.0, float(self.get_parameter("avoid_min_turn_time").value))
         self._avoid_clear_hold_s = max(0.0, float(self.get_parameter("avoid_clear_hold_time").value))
         self._avoid_dir_eps = max(0.0, float(self.get_parameter("avoid_dir_hysteresis").value))
+        self._avoid_backup_v = float(self.get_parameter("avoid_backup_linear").value)
+        if self._avoid_backup_v > 0.0:
+            self._avoid_backup_v = -self._avoid_backup_v
+        self._avoid_backup_time_s = max(0.0, float(self.get_parameter("avoid_backup_time").value))
+        self._avoid_backup_trigger_s = max(
+            0.0, float(self.get_parameter("avoid_backup_trigger_time").value)
+        )
+        self._avoid_backup_cooldown_s = max(
+            0.0, float(self.get_parameter("avoid_backup_cooldown").value)
+        )
+        self._avoid_backup_w_scale = max(
+            0.0, float(self.get_parameter("avoid_backup_angular_scale").value)
+        )
         self._scan_front_angle = float(self.get_parameter("scan_front_angle").value)
         self._scan_side_angle = float(self.get_parameter("scan_side_angle").value)
         self._scan_min_valid = float(self.get_parameter("scan_min_valid_range").value)
@@ -667,6 +687,9 @@ class PatrolManager(Node):
         self._avoid_dir = 1.0
         self._avoid_start_ns: Optional[int] = None
         self._avoid_clear_since_ns: Optional[int] = None
+        self._avoid_blocked_since_ns: Optional[int] = None
+        self._avoid_backup_until_ns: Optional[int] = None
+        self._avoid_backup_last_ns: Optional[int] = None
         self._pass_active = False
         self._pass_dir = 1.0
         self._pass_clear_since_ns: Optional[int] = None
@@ -941,6 +964,8 @@ class PatrolManager(Node):
             self._avoid_active = False
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
+            self._avoid_blocked_since_ns = None
+            self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
             self._idx += 1
@@ -971,6 +996,8 @@ class PatrolManager(Node):
             self._avoid_active = False
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
+            self._avoid_blocked_since_ns = None
+            self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
             if (
@@ -1136,6 +1163,13 @@ class PatrolManager(Node):
             else:
                 self._avoid_clear_since_ns = None
 
+            # Track how long we remain "hard-blocked" (no direction has >= obstacle_stop_distance).
+            if drive_clearance < self._obs_stop:
+                if self._avoid_blocked_since_ns is None:
+                    self._avoid_blocked_since_ns = now_ns
+            else:
+                self._avoid_blocked_since_ns = None
+
             min_turn_ok = (
                 self._avoid_start_ns is None
                 or (now_ns - self._avoid_start_ns) >= int(self._avoid_min_turn_s * 1e9)
@@ -1149,8 +1183,50 @@ class PatrolManager(Node):
                 self._avoid_active = False
                 self._avoid_start_ns = None
                 self._avoid_clear_since_ns = None
+                self._avoid_blocked_since_ns = None
+                self._avoid_backup_until_ns = None
 
         if drive_clearance is not None and self._avoid_active:
+            # Corner recovery: if we keep being blocked for too long, back up while turning toward
+            # the more open side to un-wedge the wheels from the wall corner.
+            if self._avoid_backup_until_ns is not None and now_ns < self._avoid_backup_until_ns:
+                w = self._avoid_dir * self._avoid_w * self._avoid_backup_w_scale
+                self._publish_cmd(self._avoid_backup_v, w)
+                return
+
+            if (
+                self._avoid_backup_time_s > 0.0
+                and self._avoid_backup_trigger_s > 0.0
+                and self._avoid_blocked_since_ns is not None
+                and (now_ns - self._avoid_blocked_since_ns)
+                >= int(self._avoid_backup_trigger_s * 1e9)
+            ):
+                cooldown_ok = True
+                if self._avoid_backup_last_ns is not None and self._avoid_backup_cooldown_s > 0.0:
+                    cooldown_ok = (now_ns - self._avoid_backup_last_ns) >= int(
+                        self._avoid_backup_cooldown_s * 1e9
+                    )
+                if cooldown_ok:
+                    # Pick a direction towards the more open side before backing up.
+                    if scan_available and abs(scan_angle_raw) > 1e-3:
+                        self._avoid_dir = 1.0 if scan_angle_raw > 0.0 else -1.0
+                    elif left_min is not None and right_min is not None:
+                        self._avoid_dir = 1.0 if left_min >= right_min else -1.0
+
+                    self._avoid_backup_last_ns = now_ns
+                    self._avoid_backup_until_ns = now_ns + int(self._avoid_backup_time_s * 1e9)
+                    self._avoid_blocked_since_ns = now_ns
+                    self.get_logger().info(
+                        f"Corner recovery: backing up {self._avoid_backup_time_s:.2f}s "
+                        f"v={self._avoid_backup_v:.2f} w={self._avoid_dir * self._avoid_w * self._avoid_backup_w_scale:.2f}"
+                    )
+                    self._path = None
+                    self._path_goal_idx = None
+                    self._path_idx = 0
+                    w = self._avoid_dir * self._avoid_w * self._avoid_backup_w_scale
+                    self._publish_cmd(self._avoid_backup_v, w)
+                    return
+
             # After a short minimum turn time, allow switching turn direction towards the
             # more open side to reduce jitter.
             if (
@@ -1183,6 +1259,8 @@ class PatrolManager(Node):
             self._avoid_active = True
             self._avoid_start_ns = now_ns
             self._avoid_clear_since_ns = None
+            self._avoid_blocked_since_ns = now_ns
+            self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
             self._scan_angle_filt = 0.0

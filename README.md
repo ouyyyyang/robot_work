@@ -169,6 +169,17 @@ ros2 launch patrol_bringup patrol.launch.py \
   scan_prev_align_weight:=0.5
 ```
 
+如果仍然会卡在墙角（轮子被楔住，原地转也转不出来），可以启用“倒车脱困”（示例）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py \
+  avoid_backup_trigger_time:=2.0 \
+  avoid_backup_time:=0.6 \
+  avoid_backup_linear:=-0.08 \
+  avoid_backup_angular_scale:=0.8 \
+  avoid_backup_cooldown:=2.0
+```
+
 如果出现“转弯转过头/方向反了”的情况，可以让大角速度时原地转向（示例）：
 
 ```bash
