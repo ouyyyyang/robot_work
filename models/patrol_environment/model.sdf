@@ -3122,13 +3122,13 @@
       </link>
     </model>
 
-    <model name="patrol_point_2">
-      <static>true</static>
-      <pose>7.102 0.440 0.1 0 0 0</pose>
-      <link name="patrol_point_2_link">
-        <visual name="patrol_point_2_visual">
-          <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material>
+	    <model name="patrol_point_2">
+	      <static>true</static>
+	      <pose>6.586306 -4.121595 0.1 0 0 0</pose>
+	      <link name="patrol_point_2_link">
+	        <visual name="patrol_point_2_visual">
+	          <geometry><sphere><radius>0.2</radius></sphere></geometry>
+	          <material>
             <ambient>1 0 0 1</ambient>
             <diffuse>1 0 0 1</diffuse>
             <emissive>0.3 0 0 1</emissive>
@@ -3137,13 +3137,13 @@
       </link>
     </model>
 
-    <model name="patrol_point_3">
-      <static>true</static>
-      <pose>3.102 -2.360 0.1 0 0 0</pose>
-      <link name="patrol_point_3_link">
-        <visual name="patrol_point_3_visual">
-          <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material>
+	    <model name="patrol_point_3">
+	      <static>true</static>
+	      <pose>-1.721714 -2.812131 0.1 0 0 0</pose>
+	      <link name="patrol_point_3_link">
+	        <visual name="patrol_point_3_visual">
+	          <geometry><sphere><radius>0.2</radius></sphere></geometry>
+	          <material>
             <ambient>0 0 1 1</ambient>
             <diffuse>0 0 1 1</diffuse>
             <emissive>0 0 0.3 1</emissive>
@@ -3152,13 +3152,13 @@
       </link>
     </model>
 
-    <model name="patrol_point_4">
-      <static>true</static>
-      <pose>-3.148 -2.810 0.1 0 0 0</pose>
-      <link name="patrol_point_4_link">
-        <visual name="patrol_point_4_visual">
-          <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material>
+	    <model name="patrol_point_4">
+	      <static>true</static>
+	      <pose>-4.006013 -0.716855 0.1 0 0 0</pose>
+	      <link name="patrol_point_4_link">
+	        <visual name="patrol_point_4_visual">
+	          <geometry><sphere><radius>0.2</radius></sphere></geometry>
+	          <material>
             <ambient>1 0 0 1</ambient>
             <diffuse>1 0 0 1</diffuse>
             <emissive>0.3 0 0 1</emissive>
@@ -3167,13 +3167,13 @@
       </link>
     </model>
 
-    <model name="patrol_point_5">
-      <static>true</static>
-      <pose>-6.248 -5.460 0.1 0 0 0</pose>
-      <link name="patrol_point_5_link">
-        <visual name="patrol_point_5_visual">
-          <geometry><sphere><radius>0.2</radius></sphere></geometry>
-          <material>
+	    <model name="patrol_point_5">
+	      <static>true</static>
+	      <pose>-2.958408 4.375596 0.1 0 0 0</pose>
+	      <link name="patrol_point_5_link">
+	        <visual name="patrol_point_5_visual">
+	          <geometry><sphere><radius>0.2</radius></sphere></geometry>
+	          <material>
             <ambient>0 0 1 1</ambient>
             <diffuse>0 0 1 1</diffuse>
             <emissive>0 0 0.3 1</emissive>

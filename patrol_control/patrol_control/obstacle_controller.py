@@ -57,7 +57,7 @@ class ObstacleController(Node):
         self._phases = [0.0 for _ in self._obstacles]  # distance along [0, 2*L)
         self._last_time = self.get_clock().now()
 
-        self._clients = [
+        self._service_clients = [ 
             (name, self.create_client(SetEntityState, name)) for name in self._service_candidates
         ]
         self._active_client = None
@@ -78,7 +78,7 @@ class ObstacleController(Node):
         if self._active_client is None or not self._active_client.service_is_ready():
             self._active_client = None
             self._active_service_name = ""
-            for name, client in self._clients:
+            for name, client in self._service_clients:
                 if client.service_is_ready():
                     self._active_client = client
                     self._active_service_name = name
@@ -87,7 +87,7 @@ class ObstacleController(Node):
 
         if self._active_client is None:
             # Non-blocking wait so the node can still shutdown cleanly when Gazebo isn't ready.
-            for _name, client in self._clients:
+            for _name, client in self._service_clients:
                 client.wait_for_service(timeout_sec=0.0)
             now_ns = int(self.get_clock().now().nanoseconds)
             if now_ns - self._last_wait_log_ns > int(1e9):

@@ -1,11 +1,17 @@
 <?xml version="1.0" ?>
 <sdf version="1.7">
   <world name="patrol_world">
+    <gui fullscreen='0'>
+      <camera name='user_camera'>
+        <pose>0 0 18 0 1.5708 0</pose>
+        <view_controller>orbit</view_controller>
+        <projection_type>perspective</projection_type>
+      </camera>
+    </gui>
     <include>
       <uri>model://sun</uri>
     </include>
 
-    <!-- Ground plane moved from models/patrol_environment/model.sdf -->
     <model name="ground">
       <static>true</static>
       <link name="ground_link">
@@ -41,14 +47,19 @@
 
     <include>
       <uri>model://patrol_environment</uri>
-      <!-- Keep consistent with models/patrol_environment/model.sdf top-level pose -->
       <pose>-2.57827 0.945924 0 0 0 0</pose>
     </include>
 
-    <!-- Obstacles moved out of patrol_environment (easy to move via ROS2 /gazebo services) -->
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/</namespace>
+      </ros>
+      <update_rate>10.0</update_rate>
+    </plugin>
+
     <model name="obstacle_1">
       <static>false</static>
-      <pose>3.724 4.986 0.25 0 0 0</pose>
+      <pose>3.531 4.683 0.25 0 0 0</pose>
       <link name="obstacle_1_link">
         <gravity>false</gravity>
         <self_collide>false</self_collide>

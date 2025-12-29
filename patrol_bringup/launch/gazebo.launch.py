@@ -23,8 +23,8 @@ def generate_launch_description() -> LaunchDescription:
     # If true, rely on `libgazebo_ros_joint_state_publisher.so` in the robot SDF to publish /joint_states.
     # Set to false to use the Python fallback node (useful if the plugin isn't available on your system).
     use_gazebo_joint_states_arg = DeclareLaunchArgument("use_gazebo_joint_states", default_value="true")
-    robot_x_arg = DeclareLaunchArgument("robot_x", default_value="1.482")
-    robot_y_arg = DeclareLaunchArgument("robot_y", default_value="5.779")
+    robot_x_arg = DeclareLaunchArgument("robot_x", default_value="-3.266891")
+    robot_y_arg = DeclareLaunchArgument("robot_y", default_value="3.240773")
     robot_z_arg = DeclareLaunchArgument("robot_z", default_value="0.0")
     robot_yaw_arg = DeclareLaunchArgument("robot_yaw", default_value="-0.965")
 

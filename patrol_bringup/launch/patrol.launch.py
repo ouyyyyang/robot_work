@@ -37,7 +37,7 @@ def generate_launch_description() -> LaunchDescription:
     scan_forward_bias_arg = DeclareLaunchArgument("scan_forward_bias", default_value="0.25")
     scan_angle_smoothing_arg = DeclareLaunchArgument("scan_angle_smoothing", default_value="0.25")
     scan_angle_deadband_arg = DeclareLaunchArgument("scan_angle_deadband", default_value="0.05")
-    scan_edge_margin_arg = DeclareLaunchArgument("scan_edge_margin", default_value="0.08")
+    scan_edge_margin_arg = DeclareLaunchArgument("scan_edge_margin", default_value="0.22")
     turn_in_place_angular_arg = DeclareLaunchArgument("turn_in_place_angular", default_value="1.0")
     pass_clear_hold_time_arg = DeclareLaunchArgument("pass_clear_hold_time", default_value="0.25")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
@@ -51,8 +51,8 @@ def generate_launch_description() -> LaunchDescription:
     vision_publish_interval_arg = DeclareLaunchArgument("vision_publish_interval", default_value="0.2")
     use_path_planner_arg = DeclareLaunchArgument("use_path_planner", default_value="true")
     grid_resolution_arg = DeclareLaunchArgument("grid_resolution", default_value="0.10")
-    wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.17")
-    lookahead_distance_arg = DeclareLaunchArgument("lookahead_distance", default_value="0.7")
+    wall_inflation_arg = DeclareLaunchArgument("wall_inflation", default_value="0.18")
+    lookahead_distance_arg = DeclareLaunchArgument("lookahead_distance", default_value="0.50")
     plan_interval_arg = DeclareLaunchArgument("plan_interval", default_value="1.0")
     use_dynamic_obstacles_arg = DeclareLaunchArgument("use_dynamic_obstacles", default_value="true")
     obstacle_inflation_arg = DeclareLaunchArgument("obstacle_inflation", default_value="0.17")
@@ -121,35 +121,45 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="patrol_control",
-                executable="obstacle_controller",
-                output="screen",
-                parameters=[
-                    {
-                        "use_sim_time": LaunchConfiguration("use_sim_time"),
-                        "point_a_x": ParameterValue(
-                            LaunchConfiguration("obstacle_a_x"), value_type=float
-                        ),
-                        "point_a_y": ParameterValue(
-                            LaunchConfiguration("obstacle_a_y"), value_type=float
-                        ),
-                        "point_b_x": ParameterValue(
-                            LaunchConfiguration("obstacle_b_x"), value_type=float
-                        ),
-                        "point_b_y": ParameterValue(
-                            LaunchConfiguration("obstacle_b_y"), value_type=float
-                        ),
-                        "speed": ParameterValue(
-                            LaunchConfiguration("obstacle_speed"), value_type=float
-                        ),
-                    }
-                ],
-            ),
-            Node(
-                package="patrol_control",
                 executable="twist_relay",
                 output="screen",
                 condition=IfCondition(LaunchConfiguration("use_nav2")),
                 parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+            ),
+            Node(
+                package="patrol_control",
+                executable="obstacle_controller",
+                name="obstacle_controller_3",  
+                output="screen",
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "obstacles": ["obstacle_3"],  
+                        "point_a_x": 2.415121,
+                        "point_a_y": -0.896010,
+                        "point_b_x": 1.646652,
+                        "point_b_y": -2.586077,
+                        "speed": 0.3,  
+                    }
+                ],
+            ),
+
+            Node(
+                package="patrol_control",
+                executable="obstacle_controller",
+                name="obstacle_controller_5",  
+                output="screen",
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "obstacles": ["obstacle_5"], 
+                        "point_a_x": -7.117277,
+                        "point_a_y": -3.460599,
+                        "point_b_x": -8.384773,
+                        "point_b_y": -1.172267,
+                        "speed": 0.3,  
+                    }
+                ],
             ),
         ]
     )
