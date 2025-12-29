@@ -1,8 +1,7 @@
 # slam_toolbox parameters (ROS2 Humble)
 #
 # This file is used by `patrol_bringup/launch/patrol.launch.py` when `use_nav2:=true`.
-# The scan topic is remapped there:
-#   scan -> /patrol_robot/ultrasonic/scan
+# The scan topic is configured here as an absolute topic name.
 
 slam_toolbox:
   ros__parameters:

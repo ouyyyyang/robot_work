@@ -34,10 +34,16 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     # Ensure Gazebo can find ROS-Gazebo plugins even if the user didn't source ROS env in this shell.
+    # Also keep Gazebo's default plugin dirs in case `GAZEBO_PLUGIN_PATH` was unset.
     set_plugin_path = SetEnvironmentVariable(
         name="GAZEBO_PLUGIN_PATH",
         value=[
-            TextSubstitution(text="/opt/ros/humble/lib:"),
+            TextSubstitution(
+                text="/opt/ros/humble/lib:"
+                "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:"
+                "/usr/lib/aarch64-linux-gnu/gazebo-11/plugins:"
+                "/usr/lib/gazebo-11/plugins:"
+            ),
             EnvironmentVariable("GAZEBO_PLUGIN_PATH", default_value=""),
         ],
     )
@@ -117,19 +123,6 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    odom_tf_broadcaster = Node(
-        package="patrol_control",
-        executable="odom_tf_broadcaster",
-        output="screen",
-        parameters=[
-            {
-                "use_sim_time": ParameterValue(
-                    LaunchConfiguration("use_sim_time"), value_type=bool
-                )
-            }
-        ],
-    )
-
     environment_markers = Node(
         package="patrol_control",
         executable="environment_markers",
@@ -159,7 +152,6 @@ def generate_launch_description() -> LaunchDescription:
             spawn_robot,
             robot_state_publisher,
             wheel_joint_state_publisher,
-            odom_tf_broadcaster,
             environment_markers,
         ]
     )

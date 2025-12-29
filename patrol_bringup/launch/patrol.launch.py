@@ -3,7 +3,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDesc
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
-from launch_ros.actions import Node, SetRemap
+from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
@@ -260,7 +260,6 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     # Optional Nav2 bringup (SLAM by default).
-    # Topic remaps connect Nav2's default topics to this project's robot namespace.
     nav2_use_sim_time = PythonExpression(
         ["'", LaunchConfiguration("use_sim_time"), "'.lower() in ['true','1','yes']"]
     )
@@ -269,9 +268,8 @@ def generate_launch_description() -> LaunchDescription:
     )
     nav2 = GroupAction(
         actions=[
-            SetRemap(src="scan", dst="/patrol_robot/ultrasonic/scan"),
-            SetRemap(src="odom", dst="/patrol_robot/odom"),
-            SetRemap(src="cmd_vel", dst="/patrol_robot/cmd_vel"),
+            # This project uses explicit absolute topic names in params files, so we avoid global remaps
+            # (they can make debugging harder when mixing Gazebo + Nav2 + custom nodes).
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution([nav2_share, "launch", "bringup_launch.py"])

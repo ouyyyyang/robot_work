@@ -491,10 +491,17 @@ ros2 node list | grep twist_relay
 
 ### 5) `local_costmap` 报 “Timed out waiting for transform … base_link to odom”
 
-这表示 **TF 里缺少 `odom -> base_link`**（Nav2 必需的里程计坐标变换）。本工程使用 `patrol_control/odom_tf_broadcaster` 从 `/patrol_robot/odom` 自动广播该 TF。
+这表示 **TF 里缺少 `odom -> base_link`**（Nav2 必需的里程计坐标变换）。
+
+本工程默认由 Gazebo 的 `libgazebo_ros_diff_drive` 插件发布该 TF（`models/patrol_robot/model.sdf` 里 `publish_odom_tf=true`）。
 
 ```bash
-ros2 node list | grep odom_tf_broadcaster
 ros2 topic echo /patrol_robot/odom --once
 ros2 run tf2_ros tf2_echo odom base_link
+```
+
+如果 `/patrol_robot/odom` 有数据但还是没有 TF，可以临时用兜底广播器：
+
+```bash
+ros2 run patrol_control odom_tf_broadcaster --ros-args -p odom_topic:=/patrol_robot/odom
 ```
