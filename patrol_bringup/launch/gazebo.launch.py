@@ -29,7 +29,7 @@ def generate_launch_description() -> LaunchDescription:
         value=[
             models_dir,
             TextSubstitution(text=":/usr/share/gazebo-11/models:"),
-            EnvironmentVariable("GAZEBO_MODEL_PATH"),
+            EnvironmentVariable("GAZEBO_MODEL_PATH", default_value=""),
         ],
     )
 
@@ -38,7 +38,7 @@ def generate_launch_description() -> LaunchDescription:
         name="GAZEBO_PLUGIN_PATH",
         value=[
             TextSubstitution(text="/opt/ros/humble/lib:"),
-            EnvironmentVariable("GAZEBO_PLUGIN_PATH"),
+            EnvironmentVariable("GAZEBO_PLUGIN_PATH", default_value=""),
         ],
     )
 
