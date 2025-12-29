@@ -54,10 +54,10 @@ class Nav2PatrolManager(Node):
 
         self.declare_parameter("action_name", "navigate_to_pose")
         self.declare_parameter("goal_frame", "map")
-        # Patrol points in this project are authored in Gazebo world coordinates.
-        # Gazebo diff-drive odom is also world-referenced by default, and SLAM/AMCL provides map->odom.
-        # Using map as the default avoids waiting for a TF transform at startup.
-        self.declare_parameter("point_frame", "map")
+        # Patrol points are authored in Gazebo world coordinates. In this project, Gazebo diff-drive odom
+        # is world-referenced by default, and SLAM provides `map -> odom`. So we default point_frame=odom
+        # and transform to goal_frame (map) before sending goals.
+        self.declare_parameter("point_frame", "odom")
         self.declare_parameter("environment_sdf", "")
         self.declare_parameter("dwell_time", 2.0)
         self.declare_parameter("loop_patrol", True)

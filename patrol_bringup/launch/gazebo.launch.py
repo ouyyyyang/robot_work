@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.conditions import UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
@@ -19,6 +20,9 @@ def generate_launch_description() -> LaunchDescription:
     world_arg = DeclareLaunchArgument("world", default_value=world_default)
     gui_arg = DeclareLaunchArgument("gui", default_value="true")
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
+    # If true, rely on `libgazebo_ros_joint_state_publisher.so` in the robot SDF to publish /joint_states.
+    # Set to false to use the Python fallback node (useful if the plugin isn't available on your system).
+    use_gazebo_joint_states_arg = DeclareLaunchArgument("use_gazebo_joint_states", default_value="true")
     robot_x_arg = DeclareLaunchArgument("robot_x", default_value="1.482")
     robot_y_arg = DeclareLaunchArgument("robot_y", default_value="5.779")
     robot_z_arg = DeclareLaunchArgument("robot_z", default_value="0.0")
@@ -114,6 +118,7 @@ def generate_launch_description() -> LaunchDescription:
         package="patrol_control",
         executable="wheel_joint_state_publisher",
         output="screen",
+        condition=UnlessCondition(LaunchConfiguration("use_gazebo_joint_states")),
         parameters=[
             {
                 "use_sim_time": ParameterValue(
@@ -141,6 +146,7 @@ def generate_launch_description() -> LaunchDescription:
             world_arg,
             gui_arg,
             use_sim_time_arg,
+            use_gazebo_joint_states_arg,
             robot_x_arg,
             robot_y_arg,
             robot_z_arg,

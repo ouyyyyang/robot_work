@@ -269,7 +269,7 @@
 
     <!-- Ultrasonic range sensor -->
     <link name="ultrasonic_link">
-      <pose>0.23 0 0.10 0 0 0</pose>
+      <pose>0.23 0 0.13 0 0 0</pose>
       <inertial>
         <mass>0.05</mass>
         <inertia>
@@ -307,7 +307,8 @@
         <always_on>true</always_on>
         <!-- Keep scan rate modest to avoid TF message-filter queue overflow in slam_toolbox on VMs -->
         <update_rate>10</update_rate>
-        <visualize>false</visualize>
+        <!-- Set to false if Gazebo GUI is slow on your VM -->
+        <visualize>true</visualize>
         <ray>
           <scan>
             <horizontal>
@@ -338,6 +339,17 @@
       <parent>base_link</parent>
       <child>ultrasonic_link</child>
     </joint>
+
+    <!-- Publish wheel joint states for RViz / robot_state_publisher -->
+    <plugin name="joint_state_publisher_plugin" filename="libgazebo_ros_joint_state_publisher.so">
+      <!-- Use global namespace so the default output is /joint_states -->
+      <ros>
+        <namespace>/</namespace>
+      </ros>
+      <update_rate>20</update_rate>
+      <joint_name>left_wheel_joint</joint_name>
+      <joint_name>right_wheel_joint</joint_name>
+    </plugin>
 
     <!-- Differential drive controller -->
     <plugin name="diff_drive_plugin" filename="libgazebo_ros_diff_drive.so">

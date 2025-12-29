@@ -15,6 +15,7 @@ def generate_launch_description() -> LaunchDescription:
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="false")
     gui_arg = DeclareLaunchArgument("gui", default_value="true")
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
+    use_gazebo_joint_states_arg = DeclareLaunchArgument("use_gazebo_joint_states", default_value="true")
     max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
     obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
     obstacle_slow_distance_arg = DeclareLaunchArgument("obstacle_slow_distance", default_value="0.90")
@@ -35,6 +36,8 @@ def generate_launch_description() -> LaunchDescription:
     pass_clear_hold_time_arg = DeclareLaunchArgument("pass_clear_hold_time", default_value="0.25")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
+    # Start/stop the patrol logic (useful when you want to manually send Nav2 goals from RViz).
+    enable_patrol_arg = DeclareLaunchArgument("enable_patrol", default_value="true")
     vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
     vision_dominance_ratio_arg = DeclareLaunchArgument("vision_dominance_ratio", default_value="1.25")
     vision_min_channel_value_arg = DeclareLaunchArgument("vision_min_channel_value", default_value="60")
@@ -73,6 +76,7 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={
             "use_sim_time": LaunchConfiguration("use_sim_time"),
             "gui": LaunchConfiguration("gui"),
+            "use_gazebo_joint_states": LaunchConfiguration("use_gazebo_joint_states"),
         }.items(),
     )
 
@@ -141,6 +145,12 @@ def generate_launch_description() -> LaunchDescription:
                 condition=IfCondition(LaunchConfiguration("use_nav2")),
                 parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
             ),
+        ]
+    )
+
+    patrol_nodes = GroupAction(
+        condition=IfCondition(LaunchConfiguration("enable_patrol")),
+        actions=[
             Node(
                 package="patrol_control",
                 executable="patrol_manager",
@@ -256,7 +266,7 @@ def generate_launch_description() -> LaunchDescription:
                     }
                 ],
             ),
-        ]
+        ],
     )
 
     # Optional Nav2 bringup (SLAM by default).
@@ -292,6 +302,7 @@ def generate_launch_description() -> LaunchDescription:
             use_nav2_arg,
             gui_arg,
             use_sim_time_arg,
+            use_gazebo_joint_states_arg,
             max_linear_arg,
             obstacle_stop_distance_arg,
             obstacle_slow_distance_arg,
@@ -312,6 +323,7 @@ def generate_launch_description() -> LaunchDescription:
             pass_clear_hold_time_arg,
             dwell_time_arg,
             loop_patrol_arg,
+            enable_patrol_arg,
             vision_roi_size_arg,
             vision_dominance_ratio_arg,
             vision_min_channel_value_arg,
@@ -338,5 +350,6 @@ def generate_launch_description() -> LaunchDescription:
             gazebo,
             nav2,
             control_nodes,
+            patrol_nodes,
         ]
     )

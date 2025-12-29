@@ -89,6 +89,11 @@ ros2 launch patrol_bringup gazebo.launch.py
 ```
 
 说明：`gazebo.launch.py` 只负责启动 Gazebo + 生成机器人，不会让车自动巡逻。
+默认使用 Gazebo 插件 `libgazebo_ros_joint_state_publisher.so` 发布 `/joint_states`；如果你的系统缺这个插件，可用 `use_gazebo_joint_states:=false` 启用 Python 兜底发布：
+
+```bash
+ros2 launch patrol_bringup gazebo.launch.py use_gazebo_joint_states:=false
+```
 
 #### 键盘控制（手动测试移动）
 
@@ -231,7 +236,7 @@ gazebo --verbose worlds/patrol_world.sdf
 ## 关键话题
 
 - 机器人速度：`/patrol_robot/cmd_vel`
-- Nav2 速度（转发前）：`/cmd_vel`、`/cmd_vel_smoothed`、`/cmd_vel_nav`（由 `patrol_control/twist_relay` 转发到 `/patrol_robot/cmd_vel`）
+- Nav2 速度（转发前）：通常看 `(/)cmd_vel`；`nav2_bringup` 默认会把 `cmd_vel_smoothed` remap 到 `cmd_vel`，所以你可能看不到 `(/)cmd_vel_smoothed` 的 publisher；`(/)cmd_vel_nav` 一般只在导航运动时才会有数据（由 `patrol_control/twist_relay` 转发到 `/patrol_robot/cmd_vel`）
 - 里程计：`/patrol_robot/odom`
 - 地图（Nav2+SLAM）：`/map`
 - 相机：`/patrol_robot/front_camera/image_raw`
@@ -277,6 +282,13 @@ RViz2 里建议这样配置：
 
 说明：`gazebo.launch.py` 会启动 `robot_state_publisher`（发布机器人各 link 的 TF）和 `/joint_states`（轮子随运动转动），所以 RViz2 可以看到完整机器人模型与传感器 TF。
 提示：如果你把 `Fixed Frame` 设为 `map`，但没有启动 Nav2/SLAM（没有 `map->odom` TF），RViz2 会显示不出来，这是正常的。
+
+常见误区：
+
+- **`2D Pose Estimate` 不会让机器人移动**：它只是发布 `/initialpose` 给定位/SLAM 用（告诉系统“机器人现在大概在哪里”）。
+- 真正让机器人去某个点要用 **`2D Nav Goal` / `Nav2 Goal`**（发送 `/navigate_to_pose` 目标）。
+- 如果你在 RViz 日志里看到 `Setting estimate pose: Frame:base_link ...`，说明你把 `Fixed Frame` 设成了 `base_link`，这会导致 `/initialpose` 的 frame 不对（Nav2 通常需要 `map`），请改回 `map` 再试。
+- 如果你用 RViz 手动点 `Nav Goal` 但机器人还是“按巡检逻辑走”，把巡检节点关掉：`ros2 launch patrol_bringup patrol.launch.py use_nav2:=true enable_patrol:=false`
 
 ### 看“雷达/超声”可视化
 
@@ -429,6 +441,7 @@ source install/setup.zsh
 - `libgazebo_ros_diff_drive.so`
 - `libgazebo_ros_camera.so`
 - `libgazebo_ros_ray_sensor.so`
+- `libgazebo_ros_joint_state_publisher.so`
 
 这表示 Gazebo 找不到对应的 ROS-Gazebo 插件库（通常是没有装 `gazebo_plugins`）。
 
@@ -442,7 +455,7 @@ sudo apt install -y ros-humble-gazebo-ros-pkgs ros-humble-gazebo-plugins
 验证插件文件是否存在：
 
 ```bash
-ls /opt/ros/humble/lib | grep -E "libgazebo_ros_(diff_drive|camera|range)\\.so"
+ls /opt/ros/humble/lib | grep -E "libgazebo_ros_(diff_drive|camera|ray_sensor|joint_state_publisher)\\.so"
 ```
 
 ### 3) Nav2 一直卡在 `Waiting for service controller_server/get_state...`
@@ -477,9 +490,11 @@ ros2 node list | grep nav2_patrol_manager
 # 2) 确认 Nav2 的动作服务器存在
 ros2 action list | grep -E "^/navigate_to_pose$"
 
-# 3) 看 Nav2 是否在产生速度（这里任意一个有频率都算）
+# 3) 看 Nav2 是否在产生速度（先看 publisher，再看 hz；`ros2 topic hz` 一次只能测 1 个 topic）
+ros2 topic info -v /cmd_vel
+ros2 topic info -v /cmd_vel_nav
+ros2 topic info -v /cmd_vel_smoothed
 ros2 topic hz /cmd_vel
-ros2 topic hz /cmd_vel_smoothed
 ros2 topic hz /cmd_vel_nav
 
 # 4) 看最终机器人是否收到速度
@@ -516,3 +531,12 @@ ros2 run patrol_control odom_tf_broadcaster --ros-args -p odom_topic:=/patrol_ro
 ros2 topic hz /patrol_robot/ultrasonic/scan
 ros2 run tf2_ros tf2_echo base_link ultrasonic_link
 ```
+
+### 7) 巡检点目标坐标不对（目标点落在墙里/离巡检点很远）
+
+巡检点坐标来自 `models/patrol_environment/model.sdf`，而场地在 Gazebo 世界里的放置位置由 `worlds/patrol_world.sdf` 的 `<include>` 决定。两者必须一致，否则：
+
+- Gazebo 里巡检点在 A，但程序算出来的 goal 在 B
+- 规划失败 / 目标点不可达，导致机器人不动或一直原地转
+
+检查 `worlds/patrol_world.sdf` 里 `patrol_environment` 的 `<include>` 是否包含正确的 `<pose>`（要和 `models/patrol_environment/model.sdf` 顶层 `<pose>` 一致）。

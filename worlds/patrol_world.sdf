@@ -41,6 +41,8 @@
 
     <include>
       <uri>model://patrol_environment</uri>
+      <!-- Keep consistent with models/patrol_environment/model.sdf top-level pose -->
+      <pose>-2.57827 0.945924 0 0 0 0</pose>
     </include>
 
     <!-- Obstacles moved out of patrol_environment (easy to move via ROS2 /gazebo services) -->
