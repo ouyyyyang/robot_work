@@ -32,6 +32,7 @@ def generate_launch_description() -> LaunchDescription:
     scan_forward_bias_arg = DeclareLaunchArgument("scan_forward_bias", default_value="0.25")
     scan_angle_smoothing_arg = DeclareLaunchArgument("scan_angle_smoothing", default_value="0.25")
     scan_angle_deadband_arg = DeclareLaunchArgument("scan_angle_deadband", default_value="0.05")
+    scan_edge_margin_arg = DeclareLaunchArgument("scan_edge_margin", default_value="0.08")
     turn_in_place_angular_arg = DeclareLaunchArgument("turn_in_place_angular", default_value="1.0")
     pass_clear_hold_time_arg = DeclareLaunchArgument("pass_clear_hold_time", default_value="0.25")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
@@ -207,6 +208,9 @@ def generate_launch_description() -> LaunchDescription:
                         "scan_angle_deadband": ParameterValue(
                             LaunchConfiguration("scan_angle_deadband"), value_type=float
                         ),
+                        "scan_edge_margin": ParameterValue(
+                            LaunchConfiguration("scan_edge_margin"), value_type=float
+                        ),
                         "turn_in_place_angular": ParameterValue(
                             LaunchConfiguration("turn_in_place_angular"), value_type=float
                         ),
@@ -319,6 +323,7 @@ def generate_launch_description() -> LaunchDescription:
             scan_forward_bias_arg,
             scan_angle_smoothing_arg,
             scan_angle_deadband_arg,
+            scan_edge_margin_arg,
             turn_in_place_angular_arg,
             pass_clear_hold_time_arg,
             dwell_time_arg,

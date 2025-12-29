@@ -518,6 +518,10 @@ class PatrolManager(Node):
         self.declare_parameter("scan_forward_bias", 0.25)
         self.declare_parameter("scan_angle_smoothing", 0.25)
         self.declare_parameter("scan_angle_deadband", 0.05)
+        # Keep a safety margin inside a free "valley" when picking a steering direction.
+        # This matters more when using high-resolution scans (e.g. 360 beams), otherwise a 1-beam
+        # margin becomes too small and the robot may scrape walls/obstacles with the wheels.
+        self.declare_parameter("scan_edge_margin", 0.08)  # rad (~4.6deg)
         self.declare_parameter("turn_in_place_angular", 1.0)
         self.declare_parameter("pass_clear_hold_time", 0.25)
         self.declare_parameter("dwell_time", 2.0)
@@ -591,6 +595,7 @@ class PatrolManager(Node):
         self._scan_bias = max(0.0, min(1.0, self._scan_bias))
         self._scan_tau = max(0.0, float(self.get_parameter("scan_angle_smoothing").value))
         self._scan_deadband = max(0.0, float(self.get_parameter("scan_angle_deadband").value))
+        self._scan_edge_margin = max(0.0, float(self.get_parameter("scan_edge_margin").value))
         self._turn_in_place_w = max(0.0, float(self.get_parameter("turn_in_place_angular").value))
         self._pass_clear_hold_s = max(0.0, float(self.get_parameter("pass_clear_hold_time").value))
         self._dwell_time = max(0.0, float(self.get_parameter("dwell_time").value))
@@ -881,8 +886,18 @@ class PatrolManager(Node):
         if best_center_idx is not None:
             desired_idx = int(round((desired_angle - amin) / inc))
             desired_idx = max(best_start, min(best_end, desired_idx))
-            # Keep a small edge margin (1 beam) so we don't graze obstacles.
-            desired_idx = max(best_start + 1, min(best_end - 1, desired_idx)) if best_end - best_start >= 2 else desired_idx
+            # Keep an edge margin (in radians), independent of scan resolution.
+            edge_margin_beams = 1
+            if self._scan_edge_margin > 0.0:
+                edge_margin_beams = max(1, int(math.ceil(self._scan_edge_margin / inc)))
+
+            if best_end - best_start >= 2 * edge_margin_beams:
+                desired_idx = max(
+                    best_start + edge_margin_beams,
+                    min(best_end - edge_margin_beams, desired_idx),
+                )
+            else:
+                desired_idx = best_center_idx
             if desired_idx != best_center_idx:
                 ang2 = amin + desired_idx * inc
                 rr2 = rr_vals[desired_idx]
@@ -1222,7 +1237,11 @@ class PatrolManager(Node):
         elif abs(w_cmd) > 0.4:
             v_cmd *= 0.6
         if self._turn_in_place_w > 0.0 and abs(w_cmd) >= self._turn_in_place_w:
-            v_cmd = min(v_cmd, 0.15 * self._max_lin)
+            # In tight spaces, do not creep forward while turning hard (helps avoid wheel snagging).
+            if drive_clearance is None or (self._obs_slow > 0.0 and drive_clearance < self._obs_slow):
+                v_cmd = 0.0
+            else:
+                v_cmd = min(v_cmd, 0.15 * self._max_lin)
 
         v_cmd = max(0.0, min(self._max_lin, v_cmd))
         w_cmd = max(-self._max_ang, min(self._max_ang, w_cmd))
