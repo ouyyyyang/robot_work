@@ -505,3 +505,14 @@ ros2 run tf2_ros tf2_echo odom base_link
 ```bash
 ros2 run patrol_control odom_tf_broadcaster --ros-args -p odom_topic:=/patrol_robot/odom
 ```
+
+### 6) SLAM 报 “Message Filter dropping message … queue is full”
+
+这通常表示 `slam_toolbox` 等不到对应时间戳的 TF（或扫描频率太高导致积压）。本工程已把超声 `LaserScan` 更新频率设为 10Hz 以适配 `slam_toolbox` 默认处理频率；如果你手动把传感器更新频率调得很高，可能会出现该提示。
+
+你也可以用这些命令确认 TF 与 scan 是否匹配：
+
+```bash
+ros2 topic hz /patrol_robot/ultrasonic/scan
+ros2 run tf2_ros tf2_echo base_link ultrasonic_link
+```

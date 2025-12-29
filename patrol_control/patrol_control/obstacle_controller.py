@@ -14,7 +14,10 @@ class ObstacleController(Node):
     def __init__(self) -> None:
         super().__init__("obstacle_controller")
 
-        self.declare_parameter("service_name", "/gazebo/set_entity_state")
+        # Gazebo classic + gazebo_ros (ROS2) commonly exposes this service as `/set_entity_state`.
+        # Some setups may namespace it as `/gazebo/set_entity_state`, so we auto-detect when unset.
+        self.declare_parameter("service_name", "")
+        self.declare_parameter("service_candidates", ["/set_entity_state", "/gazebo/set_entity_state"])
         self.declare_parameter("obstacles", ["obstacle_1"])
         self.declare_parameter("point_a_x", 0.0)
         self.declare_parameter("point_a_y", 0.0)
@@ -24,9 +27,15 @@ class ObstacleController(Node):
         self.declare_parameter("z", 0.25)
         self.declare_parameter("rate_hz", 5.0)
 
-        self._service_name = (
-            self.get_parameter("service_name").get_parameter_value().string_value
+        requested_service = (
+            self.get_parameter("service_name").get_parameter_value().string_value.strip()
         )
+        candidates = [
+            s.strip()
+            for s in self.get_parameter("service_candidates").get_parameter_value().string_array_value
+            if s.strip()
+        ]
+        self._service_candidates = [requested_service] if requested_service else (candidates or ["/set_entity_state"])
         self._obstacles: List[str] = [
             s.strip()
             for s in self.get_parameter("obstacles").get_parameter_value().string_array_value
@@ -48,9 +57,15 @@ class ObstacleController(Node):
         self._phases = [0.0 for _ in self._obstacles]  # distance along [0, 2*L)
         self._last_time = self.get_clock().now()
 
-        self._client = self.create_client(SetEntityState, self._service_name)
+        self._clients = [
+            (name, self.create_client(SetEntityState, name)) for name in self._service_candidates
+        ]
+        self._active_client = None
+        self._active_service_name = ""
         self._last_wait_log_ns: int = 0
-        self.get_logger().info(f"Waiting for service: {self._service_name}")
+        self.get_logger().info(
+            f"Waiting for service: {', '.join(self._service_candidates) or '(none)'}"
+        )
         self.get_logger().info(
             f"Obstacles: {', '.join(self._obstacles) or '(none)'} | "
             f"A=({self._ax:.2f}, {self._ay:.2f}) B=({self._bx:.2f}, {self._by:.2f}) "
@@ -60,14 +75,27 @@ class ObstacleController(Node):
         self.create_timer(1.0 / max(0.1, rate_hz), self._tick)
 
     def _tick(self) -> None:
-        if not self._client.service_is_ready():
+        if self._active_client is None or not self._active_client.service_is_ready():
+            self._active_client = None
+            self._active_service_name = ""
+            for name, client in self._clients:
+                if client.service_is_ready():
+                    self._active_client = client
+                    self._active_service_name = name
+                    self.get_logger().info(f"Using service: {name}")
+                    break
+
+        if self._active_client is None:
             # Non-blocking wait so the node can still shutdown cleanly when Gazebo isn't ready.
-            if not self._client.wait_for_service(timeout_sec=0.0):
-                now_ns = int(self.get_clock().now().nanoseconds)
-                if now_ns - self._last_wait_log_ns > int(1e9):
-                    self._last_wait_log_ns = now_ns
-                    self.get_logger().info(f"Waiting for service: {self._service_name}")
-                return
+            for _name, client in self._clients:
+                client.wait_for_service(timeout_sec=0.0)
+            now_ns = int(self.get_clock().now().nanoseconds)
+            if now_ns - self._last_wait_log_ns > int(1e9):
+                self._last_wait_log_ns = now_ns
+                self.get_logger().info(
+                    f"Waiting for service: {', '.join(self._service_candidates)}"
+                )
+            return
 
         if not self._obstacles:
             return
@@ -104,7 +132,8 @@ class ObstacleController(Node):
 
             req = SetEntityState.Request()
             req.state = state
-            self._client.call_async(req)
+            if self._active_client is not None:
+                self._active_client.call_async(req)
 
 
 def main() -> None:

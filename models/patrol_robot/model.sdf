@@ -305,8 +305,9 @@
       <sensor name="ultrasonic_sensor" type="ray">
         <pose>0 0 0 0 0 0</pose>
         <always_on>true</always_on>
-        <update_rate>30</update_rate>
-        <visualize>true</visualize>
+        <!-- Keep scan rate modest to avoid TF message-filter queue overflow in slam_toolbox on VMs -->
+        <update_rate>10</update_rate>
+        <visualize>false</visualize>
         <ray>
           <scan>
             <horizontal>
