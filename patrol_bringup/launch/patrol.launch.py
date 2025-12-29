@@ -13,6 +13,7 @@ def generate_launch_description() -> LaunchDescription:
     nav2_share = FindPackageShare("nav2_bringup")
 
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="false")
+    gui_arg = DeclareLaunchArgument("gui", default_value="true")
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
     max_linear_arg = DeclareLaunchArgument("max_linear", default_value="0.35")
     obstacle_stop_distance_arg = DeclareLaunchArgument("obstacle_stop_distance", default_value="0.45")
@@ -71,6 +72,7 @@ def generate_launch_description() -> LaunchDescription:
         ),
         launch_arguments={
             "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "gui": LaunchConfiguration("gui"),
         }.items(),
     )
 
@@ -290,6 +292,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             use_nav2_arg,
+            gui_arg,
             use_sim_time_arg,
             max_linear_arg,
             obstacle_stop_distance_arg,

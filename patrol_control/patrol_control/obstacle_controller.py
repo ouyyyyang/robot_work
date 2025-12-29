@@ -49,8 +49,8 @@ class ObstacleController(Node):
         self._last_time = self.get_clock().now()
 
         self._client = self.create_client(SetEntityState, self._service_name)
+        self._last_wait_log_ns: int = 0
         self.get_logger().info(f"Waiting for service: {self._service_name}")
-        self._client.wait_for_service()
         self.get_logger().info(
             f"Obstacles: {', '.join(self._obstacles) or '(none)'} | "
             f"A=({self._ax:.2f}, {self._ay:.2f}) B=({self._bx:.2f}, {self._by:.2f}) "
@@ -60,6 +60,15 @@ class ObstacleController(Node):
         self.create_timer(1.0 / max(0.1, rate_hz), self._tick)
 
     def _tick(self) -> None:
+        if not self._client.service_is_ready():
+            # Non-blocking wait so the node can still shutdown cleanly when Gazebo isn't ready.
+            if not self._client.wait_for_service(timeout_sec=0.0):
+                now_ns = int(self.get_clock().now().nanoseconds)
+                if now_ns - self._last_wait_log_ns > int(1e9):
+                    self._last_wait_log_ns = now_ns
+                    self.get_logger().info(f"Waiting for service: {self._service_name}")
+                return
+
         if not self._obstacles:
             return
         if self._segment_len <= 1e-6 or self._period <= 1e-6:
@@ -107,7 +116,8 @@ def main() -> None:
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

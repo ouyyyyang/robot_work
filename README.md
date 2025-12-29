@@ -196,6 +196,19 @@ sudo apt install -y ros-humble-nav2-* ros-humble-slam-toolbox
 ros2 launch patrol_bringup patrol.launch.py use_nav2:=true
 ```
 
+如果 Gazebo GUI 不弹窗（虚拟机/显卡驱动常见），可以无 GUI 运行：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py use_nav2:=true gui:=false
+```
+
+（仍不行再尝试）强制软件渲染：
+
+```bash
+export LIBGL_ALWAYS_SOFTWARE=1
+ros2 launch patrol_bringup patrol.launch.py use_nav2:=true gui:=false
+```
+
 如果你已经保存了地图，想用“定位+导航”（不建图），可以这样启动：
 
 ```bash

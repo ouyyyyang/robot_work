@@ -17,6 +17,7 @@ def generate_launch_description() -> LaunchDescription:
     robot_sdf = PathJoinSubstitution([bringup_share, "models", "patrol_robot", "model.sdf"])
 
     world_arg = DeclareLaunchArgument("world", default_value=world_default)
+    gui_arg = DeclareLaunchArgument("gui", default_value="true")
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
     robot_x_arg = DeclareLaunchArgument("robot_x", default_value="1.482")
     robot_y_arg = DeclareLaunchArgument("robot_y", default_value="5.779")
@@ -27,11 +28,31 @@ def generate_launch_description() -> LaunchDescription:
         name="GAZEBO_MODEL_PATH",
         value=[
             models_dir,
-            TextSubstitution(text=":"),
+            TextSubstitution(text=":/usr/share/gazebo-11/models:"),
             EnvironmentVariable("GAZEBO_MODEL_PATH"),
         ],
     )
 
+    # Ensure Gazebo can find ROS-Gazebo plugins even if the user didn't source ROS env in this shell.
+    set_plugin_path = SetEnvironmentVariable(
+        name="GAZEBO_PLUGIN_PATH",
+        value=[
+            TextSubstitution(text="/opt/ros/humble/lib:"),
+            EnvironmentVariable("GAZEBO_PLUGIN_PATH"),
+        ],
+    )
+
+    # Prevent Gazebo from blocking on online model database access (common in restricted networks).
+    disable_model_db = SetEnvironmentVariable(name="GAZEBO_MODEL_DATABASE_URI", value=TextSubstitution(text=""))
+
+    # Helpful on some VMs / remote sessions (uncomment if needed):
+    #   export LIBGL_ALWAYS_SOFTWARE=1
+    # We keep it opt-in via env, but you can also set it here if your GPU/driver is problematic.
+    #
+    # set_sw_render = SetEnvironmentVariable(name="LIBGL_ALWAYS_SOFTWARE", value=TextSubstitution(text="1"))
+
+    # Gazebo classic will respect DISPLAY/Wayland settings from the environment. If GUI doesn't show up,
+    # try launching with `gui:=false` and visualize in RViz2.
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([gazebo_ros_share, "launch", "gazebo.launch.py"])
@@ -39,6 +60,9 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={
             "world": LaunchConfiguration("world"),
             "verbose": "true",
+            "gui": LaunchConfiguration("gui"),
+            # Ensure simulation starts unpaused (so /clock ticks even without GUI).
+            "pause": "false",
         }.items(),
     )
 
@@ -122,12 +146,15 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             world_arg,
+            gui_arg,
             use_sim_time_arg,
             robot_x_arg,
             robot_y_arg,
             robot_z_arg,
             robot_yaw_arg,
             set_model_path,
+            set_plugin_path,
+            disable_model_db,
             gazebo,
             spawn_robot,
             robot_state_publisher,
