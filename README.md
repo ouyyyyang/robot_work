@@ -152,6 +152,12 @@ ros2 launch patrol_bringup patrol.launch.py \
   avoid_dir_hysteresis:=0.12
 ```
 
+进入避障时默认会先倒车 `avoid_entry_backup_time` 秒再原地转向（默认 `1.0`；倒车速度使用 `max_linear` 的幅值；设为 `0.0` 可关闭）：
+
+```bash
+ros2 launch patrol_bringup patrol.launch.py avoid_entry_backup_time:=1.0
+```
+
 如果在墙角转弯容易“顶住角”或靠近障碍物左右摆头，可以调大侧向扫描范围并增加扫描引导的平滑（示例）：
 
 ```bash
@@ -172,8 +178,8 @@ ros2 launch patrol_bringup patrol.launch.py \
 ```bash
 ros2 launch patrol_bringup patrol.launch.py \
   avoid_backup_trigger_time:=2.0 \
-  avoid_backup_time:=0.6 \
-  avoid_backup_linear:=-0.08 \
+  avoid_backup_time:=1.0 \
+  avoid_backup_linear:=-0.25 \
   avoid_backup_angular_scale:=0.8 \
   avoid_backup_cooldown:=2.0
 ```

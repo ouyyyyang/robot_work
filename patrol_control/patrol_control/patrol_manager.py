@@ -542,10 +542,12 @@ class PatrolManager(Node):
         self.declare_parameter("avoid_min_turn_time", 0.35)
         self.declare_parameter("avoid_clear_hold_time", 0.15)
         self.declare_parameter("avoid_dir_hysteresis", 0.08)
+        # When we first detect a blocking obstacle, back up briefly before turning in place.
+        self.declare_parameter("avoid_entry_backup_time", 1.0)  # s
         # If the robot is stuck in a corner while in avoidance mode, do a short backup + turn to
         # free the wheels from the wall corner.
-        self.declare_parameter("avoid_backup_linear", -0.08)  # m/s (negative = reverse)
-        self.declare_parameter("avoid_backup_time", 0.6)  # s
+        self.declare_parameter("avoid_backup_linear", -0.25)  # m/s (negative = reverse)
+        self.declare_parameter("avoid_backup_time", 1.0)  # s
         self.declare_parameter("avoid_backup_trigger_time", 2.0)  # s (time stuck before backing)
         self.declare_parameter("avoid_backup_cooldown", 2.0)  # s (min time between backups)
         self.declare_parameter("avoid_backup_angular_scale", 0.8)  # scale * avoid_turn_angular
@@ -626,6 +628,9 @@ class PatrolManager(Node):
         self._avoid_min_turn_s = max(0.0, float(self.get_parameter("avoid_min_turn_time").value))
         self._avoid_clear_hold_s = max(0.0, float(self.get_parameter("avoid_clear_hold_time").value))
         self._avoid_dir_eps = max(0.0, float(self.get_parameter("avoid_dir_hysteresis").value))
+        self._avoid_entry_backup_time_s = max(
+            0.0, float(self.get_parameter("avoid_entry_backup_time").value)
+        )
         self._avoid_backup_v = float(self.get_parameter("avoid_backup_linear").value)
         if self._avoid_backup_v > 0.0:
             self._avoid_backup_v = -self._avoid_backup_v
@@ -688,6 +693,7 @@ class PatrolManager(Node):
         self._avoid_start_ns: Optional[int] = None
         self._avoid_clear_since_ns: Optional[int] = None
         self._avoid_blocked_since_ns: Optional[int] = None
+        self._avoid_entry_backup_until_ns: Optional[int] = None
         self._avoid_backup_until_ns: Optional[int] = None
         self._avoid_backup_last_ns: Optional[int] = None
         self._pass_active = False
@@ -965,6 +971,7 @@ class PatrolManager(Node):
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
             self._avoid_blocked_since_ns = None
+            self._avoid_entry_backup_until_ns = None
             self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
@@ -997,6 +1004,7 @@ class PatrolManager(Node):
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
             self._avoid_blocked_since_ns = None
+            self._avoid_entry_backup_until_ns = None
             self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
@@ -1157,6 +1165,19 @@ class PatrolManager(Node):
         # Obstacle avoidance: decide based on the best drivable direction (scan), not the minimum
         # distance in a wide front cone (which is too conservative in narrow gaps).
         if drive_clearance is not None and self._avoid_active:
+            # Entry behavior: back up briefly before turning in place.
+            if (
+                self._avoid_entry_backup_until_ns is not None
+                and now_ns < self._avoid_entry_backup_until_ns
+            ):
+                v = -abs(self._max_lin)
+                self._publish_cmd(v, 0.0)
+                return
+            if self._avoid_entry_backup_until_ns is not None:
+                self._avoid_entry_backup_until_ns = None
+                if self._avoid_start_ns is None:
+                    self._avoid_start_ns = now_ns
+
             if drive_clearance >= self._obs_clear:
                 if self._avoid_clear_since_ns is None:
                     self._avoid_clear_since_ns = now_ns
@@ -1184,6 +1205,7 @@ class PatrolManager(Node):
                 self._avoid_start_ns = None
                 self._avoid_clear_since_ns = None
                 self._avoid_blocked_since_ns = None
+                self._avoid_entry_backup_until_ns = None
                 self._avoid_backup_until_ns = None
 
         if drive_clearance is not None and self._avoid_active:
@@ -1257,14 +1279,23 @@ class PatrolManager(Node):
                 self._avoid_dir = 1.0 if err >= 0.0 else -1.0
 
             self._avoid_active = True
-            self._avoid_start_ns = now_ns
+            self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
-            self._avoid_blocked_since_ns = now_ns
+            self._avoid_blocked_since_ns = None
+            if self._avoid_entry_backup_time_s > 0.0:
+                self._avoid_entry_backup_until_ns = now_ns + int(self._avoid_entry_backup_time_s * 1e9)
+            else:
+                self._avoid_entry_backup_until_ns = None
             self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
             self._scan_angle_filt = 0.0
-            self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
+            if self._avoid_entry_backup_until_ns is not None:
+                self._publish_cmd(-abs(self._max_lin), 0.0)
+            else:
+                self._avoid_start_ns = now_ns
+                self._avoid_blocked_since_ns = now_ns
+                self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
             self._path = None
             self._path_goal_idx = None
             self._path_idx = 0
