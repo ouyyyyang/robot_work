@@ -305,7 +305,7 @@
       <sensor name="ultrasonic_sensor" type="ray">
         <pose>0 0 0 0 0 0</pose>
         <always_on>true</always_on>
-        <!-- Keep scan rate modest to avoid TF message-filter queue overflow in slam_toolbox on VMs -->
+        <!-- Keep scan rate modest to avoid message-filter queue overflow on slower machines -->
         <update_rate>10</update_rate>
         <!-- Set to false if Gazebo GUI is slow on your VM -->
         <visualize>true</visualize>

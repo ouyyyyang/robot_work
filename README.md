@@ -8,7 +8,7 @@
   - `models/patrol_environment/`：墙体 + 巡检点（红/蓝状态）
   - `models/patrol_robot/`：三轮机器人（diff-drive）+ 相机 + 超声
 - `worlds/patrol_world.sdf`：世界文件（地面 + 环境模型 + 5 个障碍物）
-- `patrol_bringup/`：ROS2 启动包（Gazebo + 可选 Nav2）
+- `patrol_bringup/`：ROS2 启动包（Gazebo）
 - `patrol_control/`：ROS2 控制节点（巡检/动态障碍/视觉判别）
 
 ## 依赖
@@ -132,9 +132,7 @@ source install/setup.bash
 ros2 launch patrol_bringup patrol.launch.py
 ```
 
-默认 `use_nav2:=false`：使用 `patrol_control/patrol_manager`（自研巡逻 + 超声避障 + 可选 A* 规划）。
-
-启用 `use_nav2:=true`：使用 **Nav2 + slam_toolbox** 进行建图与导航，并切换为 `patrol_control/nav2_patrol_manager` 依次巡检 1~5 号检查点。
+说明：`patrol.launch.py` 会启动 Gazebo + 机器人，并启动巡逻控制（`patrol_manager`）、动态障碍（`obstacle_controller`）、相机颜色判别（`vision_checker`）等节点。
 
 调快巡逻速度 / 提前避障（示例）：
 
@@ -198,44 +196,6 @@ ros2 launch patrol_bringup patrol.launch.py dwell_time:=2.0
 ros2 launch patrol_bringup patrol.launch.py loop_patrol:=true
 ```
 
-启用 Nav2 + SLAM（推荐）
-
-先安装依赖（只需要做一次）：
-
-```bash
-sudo apt update
-sudo apt install -y ros-humble-nav2-* ros-humble-slam-toolbox
-```
-
-启动（默认 `slam:=true`）：
-
-```bash
-ros2 launch patrol_bringup patrol.launch.py use_nav2:=true
-```
-
-如果 Gazebo GUI 不弹窗（虚拟机/显卡驱动常见），可以无 GUI 运行：
-
-```bash
-ros2 launch patrol_bringup patrol.launch.py use_nav2:=true gui:=false
-```
-
-（仍不行再尝试）强制软件渲染：
-
-```bash
-export LIBGL_ALWAYS_SOFTWARE=1
-ros2 launch patrol_bringup patrol.launch.py use_nav2:=true gui:=false
-```
-
-如果你已经保存了地图，想用“定位+导航”（不建图），可以这样启动：
-
-```bash
-ros2 launch patrol_bringup patrol.launch.py use_nav2:=true slam:=false map:=/absolute/path/to/your_map.yaml
-```
-
-巡检结果会在到达每个检查点并停留后发布到：
-
-- `/patrol/inspection/report`（格式：`patrol_point_N:normal|abnormal`）
-
 ### 方式 B：直接打开 Gazebo world（不含自动生成机器人）
 
 ```bash
@@ -248,15 +208,12 @@ gazebo --verbose worlds/patrol_world.sdf
 ## 关键话题
 
 - 机器人速度：`/patrol_robot/cmd_vel`
-- Nav2 速度（转发前）：通常看 `(/)cmd_vel`；`nav2_bringup` 默认会把 `cmd_vel_smoothed` remap 到 `cmd_vel`，所以你可能看不到 `(/)cmd_vel_smoothed` 的 publisher；`(/)cmd_vel_nav` 一般只在导航运动时才会有数据（由 `patrol_control/twist_relay` 转发到 `/patrol_robot/cmd_vel`）
 - 里程计：`/patrol_robot/odom`
-- 地图（Nav2+SLAM）：`/map`
 - 相机：`/patrol_robot/front_camera/image_raw`
 - 超声：`/patrol_robot/ultrasonic/range`（由 `ultrasonic/scan` 转换得到）
 - 超声原始射线：`/patrol_robot/ultrasonic/scan`（`sensor_msgs/LaserScan`，360 束，约 πrad 视场角（车头前方半圆））
 - 视觉判别结果：`/patrol/vision/status`（`normal`=蓝色，`abnormal`=红色；只有当相机 ROI 内红/蓝像素占比超过阈值时才发布，避免把黄色障碍等其它颜色误判为检查点）
 - 环境标记：`/patrol/markers`（墙体/巡检点/障碍物 MarkerArray）
-- 巡检报告（Nav2+SLAM）：`/patrol/inspection/report`
 
 ## RViz2 可视化
 
@@ -280,9 +237,7 @@ rviz2 --ros-args -p use_sim_time:=true
 
 RViz2 里建议这样配置：
 
-- `Fixed Frame`：
-  - 不用 Nav2：设为 `odom`
-  - 用 Nav2+SLAM：设为 `map`
+- `Fixed Frame`：设为 `odom`
 - `Global Options -> Use Sim Time` 设为 `true`（否则 TF 会因为时间戳不匹配而显示不出来）
 - Add → `TF`（看 TF 树）
 - Add → `Odometry`，Topic 选 `/patrol_robot/odom`
@@ -290,17 +245,8 @@ RViz2 里建议这样配置：
 - Add → `Image`，Topic 选 `/patrol_robot/front_camera/image_raw`
 - Add → `RobotModel`（显示机器人 3D 模型，使用 `robot_description`）
 - Add → `MarkerArray`，Topic 选 `/patrol/markers`（显示墙体/巡检点/障碍物）
-- （Nav2+SLAM）Add → `Map`，Topic 选 `/map`
 
 说明：`gazebo.launch.py` 会启动 `robot_state_publisher`（发布机器人各 link 的 TF）和 `/joint_states`（轮子随运动转动），所以 RViz2 可以看到完整机器人模型与传感器 TF。
-提示：如果你把 `Fixed Frame` 设为 `map`，但没有启动 Nav2/SLAM（没有 `map->odom` TF），RViz2 会显示不出来，这是正常的。
-
-常见误区：
-
-- **`2D Pose Estimate` 不会让机器人移动**：它只是发布 `/initialpose` 给定位/SLAM 用（告诉系统“机器人现在大概在哪里”）。
-- 真正让机器人去某个点要用 **`2D Nav Goal` / `Nav2 Goal`**（发送 `/navigate_to_pose` 目标）。
-- 如果你在 RViz 日志里看到 `Setting estimate pose: Frame:base_link ...`，说明你把 `Fixed Frame` 设成了 `base_link`，这会导致 `/initialpose` 的 frame 不对（Nav2 通常需要 `map`），请改回 `map` 再试。
-- 如果你用 RViz 手动点 `Nav Goal` 但机器人还是“按巡检逻辑走”，把巡检节点关掉：`ros2 launch patrol_bringup patrol.launch.py use_nav2:=true enable_patrol:=false`
 
 ### 看“雷达/超声”可视化
 
@@ -309,7 +255,7 @@ RViz2 里建议这样配置：
 
 ## 巡逻路径规划（基于墙体）
 
-本节仅适用于 `use_nav2:=false`（使用自研 `patrol_manager`）。启用 Nav2 后，路径规划 / 避障由 Nav2 的全局/局部代价地图与控制器负责。
+本工程的巡逻与路径规划由 `patrol_control/patrol_manager` 完成：解析墙体碰撞盒构建 2D 栅格，并在赛道区域里做 A* 规划。
 
 `patrol_control/patrol_manager` 默认会解析 `models/patrol_environment/model.sdf` 里的 `Wall_*` 碰撞盒，构建 2D 栅格并在赛道区域里做 A* 规划，避免“直线去目标点会穿墙”的问题。
 同时支持把 Gazebo 里的 `obstacle_*` 动态纳入规划（订阅 `/gazebo/model_states`），避免“目标点在障碍物后面时左右摆头/卡住”。
@@ -470,55 +416,9 @@ sudo apt install -y ros-humble-gazebo-ros-pkgs ros-humble-gazebo-plugins
 ls /opt/ros/humble/lib | grep -E "libgazebo_ros_(diff_drive|camera|ray_sensor|joint_state_publisher)\\.so"
 ```
 
-### 3) Nav2 一直卡在 `Waiting for service controller_server/get_state...`
+### 3) TF 报 “Invalid frame ID … odom/base_link”
 
-这通常表示 Nav2 的 `controller_server` 没有成功启动（最常见原因：缺少控制器插件包 / 参数文件配置错误导致进程直接退出），所以生命周期管理器一直等不到它的 `get_state` 服务。
-
-按下面顺序排查：
-
-```bash
-# 1) 看 controller_server 是否存在（正常应能看到）
-ros2 node list | grep controller_server
-
-# 2) 看 Nav2 组件容器 / controller_server 的报错日志（通常会提示缺哪个 plugin）
-ls -t ~/.ros/log/* | head
-```
-
-确保依赖已安装（推荐直接装全套）：
-
-```bash
-sudo apt update
-sudo apt install -y ros-humble-nav2-* ros-humble-slam-toolbox
-```
-
-### 4) Nav2 都启动了，但机器人完全不动
-
-优先按这个顺序排查（通常是 `/cmd_vel` 没有进到 `/patrol_robot/cmd_vel`，或巡检节点没成功发 goal）：
-
-```bash
-# 1) 确认巡检 goal 发送节点在跑（use_nav2:=true 时应存在）
-ros2 node list | grep nav2_patrol_manager
-
-# 2) 确认 Nav2 的动作服务器存在
-ros2 action list | grep -E "^/navigate_to_pose$"
-
-# 3) 看 Nav2 是否在产生速度（先看 publisher，再看 hz；`ros2 topic hz` 一次只能测 1 个 topic）
-ros2 topic info -v /cmd_vel
-ros2 topic info -v /cmd_vel_nav
-ros2 topic info -v /cmd_vel_smoothed
-ros2 topic hz /cmd_vel
-ros2 topic hz /cmd_vel_nav
-
-# 4) 看最终机器人是否收到速度
-ros2 topic hz /patrol_robot/cmd_vel
-
-# 5) 确认转发节点在跑（use_nav2:=true 时应存在）
-ros2 node list | grep twist_relay
-```
-
-### 5) `local_costmap` 报 “Timed out waiting for transform … base_link to odom”
-
-这表示 **TF 里缺少 `odom -> base_link`**（Nav2 必需的里程计坐标变换）。
+这表示 **TF 里缺少 `odom -> base_link`**。
 
 本工程默认由 Gazebo 的 `libgazebo_ros_diff_drive` 插件发布该 TF（`models/patrol_robot/model.sdf` 里 `publish_odom_tf=true`）。
 
@@ -533,18 +433,7 @@ ros2 run tf2_ros tf2_echo odom base_link
 ros2 run patrol_control odom_tf_broadcaster --ros-args -p odom_topic:=/patrol_robot/odom
 ```
 
-### 6) SLAM 报 “Message Filter dropping message … queue is full”
-
-这通常表示 `slam_toolbox` 等不到对应时间戳的 TF（或扫描频率太高导致积压）。本工程已把超声 `LaserScan` 更新频率设为 10Hz 以适配 `slam_toolbox` 默认处理频率；如果你手动把传感器更新频率调得很高，可能会出现该提示。
-
-你也可以用这些命令确认 TF 与 scan 是否匹配：
-
-```bash
-ros2 topic hz /patrol_robot/ultrasonic/scan
-ros2 run tf2_ros tf2_echo base_link ultrasonic_link
-```
-
-### 7) 巡检点目标坐标不对（目标点落在墙里/离巡检点很远）
+### 4) 巡检点目标坐标不对（目标点落在墙里/离巡检点很远）
 
 巡检点坐标来自 `models/patrol_environment/model.sdf`，而场地在 Gazebo 世界里的放置位置由 `worlds/patrol_world.sdf` 的 `<include>` 决定。两者必须一致，否则：
 

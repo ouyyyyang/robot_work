@@ -2,7 +2,7 @@
 <package format="3">
   <name>patrol_bringup</name>
   <version>0.1.0</version>
-  <description>Bringup (Gazebo + optional Nav2) for the patrol robot simulation.</description>
+  <description>Bringup (Gazebo) for the patrol robot simulation.</description>
 
   <maintainer email="oyzh@example.com">oyzh</maintainer>
   <license>Apache-2.0</license>
@@ -14,10 +14,6 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
-
-  <!-- Optional (used by patrol.launch.py when enabled) -->
-  <exec_depend>nav2_bringup</exec_depend>
-  <exec_depend>slam_toolbox</exec_depend>
 
   <exec_depend>patrol_control</exec_depend>
 

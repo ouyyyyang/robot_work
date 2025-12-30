@@ -31,7 +31,6 @@ setup(
             "obstacle_controller = patrol_control.obstacle_controller:main",
             "odom_tf_broadcaster = patrol_control.odom_tf_broadcaster:main",
             "patrol_manager = patrol_control.patrol_manager:main",
-            "nav2_patrol_manager = patrol_control.nav2_patrol_manager:main",
             "scan_to_range = patrol_control.scan_to_range:main",
             "twist_relay = patrol_control.twist_relay:main",
             "vision_checker = patrol_control.vision_checker:main",

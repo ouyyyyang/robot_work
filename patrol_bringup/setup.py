@@ -44,7 +44,7 @@ setup(
     zip_safe=True,
     maintainer="oyzh",
     maintainer_email="",
-    description="Bringup (Gazebo + optional Nav2) for the patrol robot simulation.",
+    description="Bringup (Gazebo) for the patrol robot simulation.",
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={

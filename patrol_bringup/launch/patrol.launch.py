@@ -1,8 +1,8 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -10,9 +10,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description() -> LaunchDescription:
     bringup_share = FindPackageShare("patrol_bringup")
-    nav2_share = FindPackageShare("nav2_bringup")
 
-    use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="false")
     gui_arg = DeclareLaunchArgument("gui", default_value="true")
     use_sim_time_arg = DeclareLaunchArgument("use_sim_time", default_value="true")
     use_gazebo_joint_states_arg = DeclareLaunchArgument("use_gazebo_joint_states", default_value="true")
@@ -42,7 +40,7 @@ def generate_launch_description() -> LaunchDescription:
     pass_clear_hold_time_arg = DeclareLaunchArgument("pass_clear_hold_time", default_value="0.25")
     dwell_time_arg = DeclareLaunchArgument("dwell_time", default_value="2.0")
     loop_patrol_arg = DeclareLaunchArgument("loop_patrol", default_value="true")
-    # Start/stop the patrol logic (useful when you want to manually send Nav2 goals from RViz).
+    # Start/stop the patrol logic (useful when you want to teleop manually).
     enable_patrol_arg = DeclareLaunchArgument("enable_patrol", default_value="true")
     vision_roi_size_arg = DeclareLaunchArgument("vision_roi_size", default_value="80")
     vision_dominance_ratio_arg = DeclareLaunchArgument("vision_dominance_ratio", default_value="1.25")
@@ -63,17 +61,6 @@ def generate_launch_description() -> LaunchDescription:
     obstacle_b_x_arg = DeclareLaunchArgument("obstacle_b_x", default_value="2.824")
     obstacle_b_y_arg = DeclareLaunchArgument("obstacle_b_y", default_value="5.136")
     obstacle_speed_arg = DeclareLaunchArgument("obstacle_speed", default_value="0.3")
-    # NOTE: nav2_bringup uses PythonExpression for some booleans; prefer "True/False".
-    slam_arg = DeclareLaunchArgument("slam", default_value="True")
-    map_arg = DeclareLaunchArgument("map", default_value="")
-    slam_params_arg = DeclareLaunchArgument(
-        "slam_params",
-        default_value=PathJoinSubstitution([bringup_share, "config", "slam_toolbox.yaml"]),
-    )
-    nav2_params_arg = DeclareLaunchArgument(
-        "nav2_params",
-        default_value=PathJoinSubstitution([bringup_share, "config", "nav2_params.yaml"]),
-    )
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -121,13 +108,6 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="patrol_control",
-                executable="twist_relay",
-                output="screen",
-                condition=IfCondition(LaunchConfiguration("use_nav2")),
-                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
-            ),
-            Node(
-                package="patrol_control",
                 executable="obstacle_controller",
                 name="obstacle_controller_3",  
                 output="screen",
@@ -137,8 +117,8 @@ def generate_launch_description() -> LaunchDescription:
                         "obstacles": ["obstacle_3"],  
                         "point_a_x": 2.415121,
                         "point_a_y": -0.896010,
-                        "point_b_x": 1.646652,
-                        "point_b_y": -2.586077,
+                        "point_b_x": 1.527585,
+                        "point_b_y": 1.527585,
                         "speed": 0.3,  
                     }
                 ],
@@ -171,7 +151,6 @@ def generate_launch_description() -> LaunchDescription:
                 package="patrol_control",
                 executable="patrol_manager",
                 output="screen",
-                condition=UnlessCondition(LaunchConfiguration("use_nav2")),
                 parameters=[
                     {
                         "use_sim_time": LaunchConfiguration("use_sim_time"),
@@ -283,57 +262,11 @@ def generate_launch_description() -> LaunchDescription:
                     }
                 ],
             ),
-            Node(
-                package="patrol_control",
-                executable="nav2_patrol_manager",
-                output="screen",
-                condition=IfCondition(LaunchConfiguration("use_nav2")),
-                parameters=[
-                    {
-                        "use_sim_time": LaunchConfiguration("use_sim_time"),
-                        "dwell_time": ParameterValue(
-                            LaunchConfiguration("dwell_time"), value_type=float
-                        ),
-                        "loop_patrol": ParameterValue(
-                            LaunchConfiguration("loop_patrol"), value_type=bool
-                        ),
-                    }
-                ],
-            ),
         ],
-    )
-
-    # Optional Nav2 bringup (SLAM by default).
-    nav2_use_sim_time = PythonExpression(
-        ["'", LaunchConfiguration("use_sim_time"), "'.lower() in ['true','1','yes']"]
-    )
-    nav2_slam = PythonExpression(
-        ["'", LaunchConfiguration("slam"), "'.lower() in ['true','1','yes']"]
-    )
-    nav2 = GroupAction(
-        actions=[
-            # This project uses explicit absolute topic names in params files, so we avoid global remaps
-            # (they can make debugging harder when mixing Gazebo + Nav2 + custom nodes).
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    PathJoinSubstitution([nav2_share, "launch", "bringup_launch.py"])
-                ),
-                condition=IfCondition(LaunchConfiguration("use_nav2")),
-                launch_arguments={
-                    "use_sim_time": nav2_use_sim_time,
-                    "slam": nav2_slam,
-                    "map": LaunchConfiguration("map"),
-                    "params_file": LaunchConfiguration("nav2_params"),
-                    "slam_params_file": LaunchConfiguration("slam_params"),
-                    "autostart": "True",
-                }.items(),
-            ),
-        ]
     )
 
     return LaunchDescription(
         [
-            use_nav2_arg,
             gui_arg,
             use_sim_time_arg,
             use_gazebo_joint_states_arg,
@@ -383,12 +316,7 @@ def generate_launch_description() -> LaunchDescription:
             obstacle_b_x_arg,
             obstacle_b_y_arg,
             obstacle_speed_arg,
-            slam_arg,
-            map_arg,
-            slam_params_arg,
-            nav2_params_arg,
             gazebo,
-            nav2,
             control_nodes,
             patrol_nodes,
         ]

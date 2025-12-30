@@ -214,7 +214,6 @@ ROS2 接口（命名空间 `/patrol_robot`）：
     - `patrol_control/scan_to_range`
     - `patrol_control/obstacle_controller`
     - `patrol_control/patrol_manager`
-  - Nav2：提供可选入口（`use_nav2:=true`），但参数文件目前为占位，需要你自行补全
 
 ### 7.2 节点：`vision_checker`（视觉判别）
 
@@ -392,8 +391,7 @@ ROS2 接口（命名空间 `/patrol_robot`）：
 
 本项目当前 **未直接使用 ROS2 Action**：
 
-- `patrol_manager` 采用“内部 A* 规划 + `/cmd_vel` 跟踪”的方式（非 Nav2 action）。
-- `patrol.launch.py` 中留有 Nav2 bringup 的入口，但要真正使用 Nav2（如 `NavigateToPose` action），需要你补地图/定位/代价地图等配置。
+- `patrol_manager` 采用“内部 A* 规划 + `/cmd_vel` 跟踪”的方式。
 
 ---
 
