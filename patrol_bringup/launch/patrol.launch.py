@@ -118,8 +118,8 @@ def generate_launch_description() -> LaunchDescription:
                         "obstacles": ["obstacle_3"],  
                         "point_a_x": 2.415121,
                         "point_a_y": -0.896010,
-                        "point_b_x": 1.527585,
-                        "point_b_y": 1.527585,
+                        "point_b_x": 1.646652,
+                        "point_b_y": -2.586077,
                         "speed": 0.3,  
                     }
                 ],

@@ -556,6 +556,11 @@ class PatrolManager(Node):
         self.declare_parameter("scan_min_valid_range", 0.05)
         self.declare_parameter("scan_goal_align_weight", 0.60)
         self.declare_parameter("scan_prev_align_weight", 0.30)
+        # If the robot makes little translational progress for a while, trigger a backup + avoid
+        # sequence to un-wedge the wheels (e.g. stuck at a wall corner).
+        self.declare_parameter("stuck_trigger_time", 5.0)  # s
+        self.declare_parameter("stuck_trigger_distance", 0.3)  # m
+        self.declare_parameter("stuck_trigger_cooldown", 8.0)  # s
 
         cmd_vel_topic = self.get_parameter("cmd_vel_topic").get_parameter_value().string_value
         odom_topic = self.get_parameter("odom_topic").get_parameter_value().string_value
@@ -650,6 +655,14 @@ class PatrolManager(Node):
         self._scan_goal_align = float(self.get_parameter("scan_goal_align_weight").value)
         self._scan_prev_align = float(self.get_parameter("scan_prev_align_weight").value)
 
+        self._stuck_trigger_time_s = max(0.0, float(self.get_parameter("stuck_trigger_time").value))
+        self._stuck_trigger_dist_m = max(
+            0.0, float(self.get_parameter("stuck_trigger_distance").value)
+        )
+        self._stuck_trigger_cooldown_s = max(
+            0.0, float(self.get_parameter("stuck_trigger_cooldown").value)
+        )
+
         self._obstacle_specs = load_obstacles_from_world_sdf(world_sdf)
         self._obstacle_poses: Dict[str, Tuple[float, float, float]] = {
             name: (spec.x, spec.y, spec.yaw) for name, spec in self._obstacle_specs.items()
@@ -684,8 +697,10 @@ class PatrolManager(Node):
         self._scan: Optional[LaserScan] = None
         self._last_vision: Optional[str] = None
         self._last_vision_stamp_ns: Optional[int] = None
+        self._segment_votes: Dict[str, int] = {"normal": 0, "abnormal": 0}
+        self._progress_hist: deque[Tuple[int, float, float]] = deque()
+        self._stuck_last_trigger_ns: Optional[int] = None
         self._waiting_vision = False
-        self._current_result: Optional[str] = None
         self._vision_wait_start_ns: Optional[int] = None
         self._dwell_until_ns: Optional[int] = None
         self._avoid_active = False
@@ -726,14 +741,31 @@ class PatrolManager(Node):
 
     def _on_vision(self, msg: String) -> None:
         now_ns = self.get_clock().now().nanoseconds
-        self._last_vision = msg.data.strip()
+        label = msg.data.strip()
+        self._last_vision = label
         self._last_vision_stamp_ns = now_ns
-        if (
-            self._waiting_vision
-            and self._last_vision in ("normal", "abnormal")
-            and (self._vision_wait_start_ns is None or now_ns >= self._vision_wait_start_ns)
-        ):
-            self._current_result = self._last_vision
+        if label in ("normal", "abnormal"):
+            self._segment_votes[label] = self._segment_votes.get(label, 0) + 1
+
+    def _segment_status(self) -> str:
+        normal_n = int(self._segment_votes.get("normal", 0))
+        abnormal_n = int(self._segment_votes.get("abnormal", 0))
+        if normal_n == 0 and abnormal_n == 0:
+            return "abnormal"
+        if normal_n > abnormal_n:
+            return "normal"
+        if abnormal_n > normal_n:
+            return "abnormal"
+        if self._last_vision in ("normal", "abnormal"):
+            return self._last_vision
+        return "abnormal"
+
+    def _reset_segment_votes(self) -> None:
+        self._segment_votes = {"normal": 0, "abnormal": 0}
+
+    def _reset_progress_history(self) -> None:
+        self._progress_hist.clear()
+        self._stuck_last_trigger_ns = None
 
     def _on_model_states(self, msg: ModelStates) -> None:
         for name, pose in zip(msg.name, msg.pose):
@@ -959,11 +991,12 @@ class PatrolManager(Node):
             if self._dwell_until_ns is not None and now_ns < self._dwell_until_ns:
                 return
 
-            point = self._points[self._idx]
-            status = self._current_result if self._current_result is not None else "abnormal"
-            self.get_logger().info(f"[{point.name}] status={status}")
+            point_number = self._idx + 1
+            status = self._segment_status()
+            self.get_logger().info(
+                f"Arrived at {point_number} inspection point status={status}"
+            )
 
-            self._current_result = None
             self._waiting_vision = False
             self._vision_wait_start_ns = None
             self._dwell_until_ns = None
@@ -983,6 +1016,8 @@ class PatrolManager(Node):
             self._path = None
             self._path_goal_idx = None
             self._path_idx = 0
+            self._reset_segment_votes()
+            self._reset_progress_history()
             return
 
         x, y, yaw = self._pose
@@ -999,7 +1034,6 @@ class PatrolManager(Node):
             self._waiting_vision = True
             self._vision_wait_start_ns = now_ns
             self._dwell_until_ns = now_ns + int(self._dwell_time * 1e9)
-            self._current_result = None
             self._avoid_active = False
             self._avoid_start_ns = None
             self._avoid_clear_since_ns = None
@@ -1008,17 +1042,11 @@ class PatrolManager(Node):
             self._avoid_backup_until_ns = None
             self._pass_active = False
             self._pass_clear_since_ns = None
-            if (
-                self._last_vision in ("normal", "abnormal")
-                and self._last_vision_stamp_ns is not None
-                and (now_ns - self._last_vision_stamp_ns)
-                <= int(self._vision_grace_s * 1e9)
-            ):
-                self._current_result = self._last_vision
             self._publish_cmd(0.0, 0.0)
             self._path = None
             self._path_goal_idx = None
             self._path_idx = 0
+            self._reset_progress_history()
             return
 
         target_x = goal.x
@@ -1095,6 +1123,71 @@ class PatrolManager(Node):
         if self._last_tick_ns is not None:
             dt = max(0.0, min(0.5, (now_ns - self._last_tick_ns) * 1e-9))
         self._last_tick_ns = now_ns
+
+        # Progress / stuck detection (translation only). If we fail to move enough over a window,
+        # trigger the same "backup then avoid" logic used for obstacle avoidance.
+        if (
+            self._stuck_trigger_time_s > 0.0
+            and self._stuck_trigger_dist_m > 0.0
+            and not self._waiting_vision
+        ):
+            self._progress_hist.append((int(now_ns), float(x), float(y)))
+            window_ns = int(self._stuck_trigger_time_s * 1e9)
+            while self._progress_hist and (now_ns - self._progress_hist[0][0]) > window_ns:
+                self._progress_hist.popleft()
+
+            if (
+                self._progress_hist
+                and (now_ns - self._progress_hist[0][0]) >= window_ns
+                and self._avoid_entry_backup_until_ns is None
+                and self._avoid_backup_until_ns is None
+            ):
+                t0_ns, x0, y0 = self._progress_hist[0]
+                moved = math.hypot(x - x0, y - y0)
+                cooldown_ok = True
+                if self._stuck_last_trigger_ns is not None and self._stuck_trigger_cooldown_s > 0.0:
+                    cooldown_ok = (now_ns - self._stuck_last_trigger_ns) >= int(
+                        self._stuck_trigger_cooldown_s * 1e9
+                    )
+                if cooldown_ok and moved < self._stuck_trigger_dist_m:
+                    if (
+                        left_min is not None
+                        and right_min is not None
+                        and abs(left_min - right_min) > self._avoid_dir_eps
+                    ):
+                        self._avoid_dir = 1.0 if left_min >= right_min else -1.0
+                    else:
+                        self._avoid_dir = 1.0 if err >= 0.0 else -1.0
+
+                    self._stuck_last_trigger_ns = int(now_ns)
+                    self._avoid_active = True
+                    self._avoid_start_ns = None
+                    self._avoid_clear_since_ns = None
+                    self._avoid_blocked_since_ns = None
+                    if self._avoid_entry_backup_time_s > 0.0:
+                        self._avoid_entry_backup_until_ns = now_ns + int(
+                            self._avoid_entry_backup_time_s * 1e9
+                        )
+                    else:
+                        self._avoid_entry_backup_until_ns = None
+                        self._avoid_start_ns = now_ns
+                    self._avoid_backup_until_ns = None
+                    self._pass_active = False
+                    self._pass_clear_since_ns = None
+                    self._scan_angle_filt = 0.0
+                    self._path = None
+                    self._path_goal_idx = None
+                    self._path_idx = 0
+                    self._progress_hist.clear()
+                    self.get_logger().info(
+                        f"Stuck detected (moved {moved:.2f}m in {self._stuck_trigger_time_s:.1f}s); "
+                        f"triggering backup+avoid"
+                    )
+                    if self._avoid_entry_backup_until_ns is not None:
+                        self._publish_cmd(-abs(self._max_lin), 0.0)
+                    else:
+                        self._publish_cmd(0.0, self._avoid_dir * self._avoid_w)
+                    return
 
         scan_available = bool(scan is not None and scan.ranges and scan.angle_increment != 0.0)
         goal_range: Optional[float] = None
